@@ -55,6 +55,7 @@ class Wp_Houla {
         require_once $base . 'class-wp-houla-orders.php';
         require_once $base . 'class-wp-houla-webhook.php';
         require_once $base . 'class-wp-houla-metabox.php';
+        require_once $base . 'class-wp-houla-order-metabox.php';
         require_once $base . 'class-wp-houla-shortlink.php';
         require_once $base . 'class-wp-houla-post-metabox.php';
         require_once $base . 'class-wp-houla-activator.php';
@@ -150,6 +151,16 @@ class Wp_Houla {
 
             // Metabox on WooCommerce products
             $this->loader->add_action( 'add_meta_boxes', $metabox, 'register_metabox' );
+
+            // Order shipping metabox
+            $order_metabox = new Wp_Houla_Order_Metabox();
+            $this->loader->add_action( 'add_meta_boxes', $order_metabox, 'register_metabox' );
+            $this->loader->add_action( 'wp_ajax_wphoula_generate_label', $order_metabox, 'ajax_generate_label' );
+            $this->loader->add_action( 'wp_ajax_wphoula_get_label_url', $order_metabox, 'ajax_get_label_url' );
+            $this->loader->add_action( 'wp_ajax_wphoula_download_label', $order_metabox, 'ajax_download_label' );
+            $this->loader->add_action( 'wp_ajax_wphoula_cancel_label', $order_metabox, 'ajax_cancel_label' );
+            $this->loader->add_action( 'wp_ajax_wphoula_print_label', $order_metabox, 'ajax_print_label' );
+            $this->loader->add_action( 'wp_ajax_wphoula_check_label_status', $order_metabox, 'ajax_check_label_status' );
 
             // Metabox AJAX actions
             $this->loader->add_action( 'wp_ajax_wphoula_sync_product', $metabox, 'ajax_sync_product' );
