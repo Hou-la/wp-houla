@@ -5,7 +5,7 @@ Tags: short links, qr code, url shortener, woocommerce, link in bio
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,10 @@ Open an issue on the [GitHub repository](https://github.com/MikhaelGerbet/wp-hou
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.5.0 - 2026-05-30 =
+* Version alignment and stability improvements
+* Tested with WordPress 6.7 and WooCommerce 9.0
 
 = 1.3.0 - 2026-03-15 =
 * Full WooCommerce sync: API ecommerce endpoints now functional (product CRUD, batch sync, stock updates)

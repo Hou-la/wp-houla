@@ -1449,14 +1449,31 @@
             return;
         }
 
+        var $table = $('#wphoula-workspace-map-table');
+        $table.css('opacity', '0.5');
+
         $.post(ajaxUrl, {
             action: 'wphoula_get_workspaces',
             nonce: nonce
         }, function (response) {
-            if (response.success && response.data && response.data.workspaces) {
-                wsMapWorkspaces = response.data.workspaces;
-                populateWsMapSelects(wsMapWorkspaces);
+            $table.css('opacity', '1');
+
+            if (!response.success) {
+                var errMsg = (response.data && typeof response.data === 'string') ? response.data : (i18n.errorUnknown || 'Unknown error');
+                $table.before('<div class="notice notice-error inline"><p><strong>Workspace loading failed:</strong> ' + errMsg + '</p></div>');
+                return;
             }
+
+            if (!response.data || !response.data.workspaces) {
+                $table.before('<div class="notice notice-error inline"><p><strong>Workspace loading failed:</strong> Invalid response</p></div>');
+                return;
+            }
+
+            wsMapWorkspaces = response.data.workspaces;
+            populateWsMapSelects(wsMapWorkspaces);
+        }).fail(function (xhr) {
+            $table.css('opacity', '1');
+            $table.before('<div class="notice notice-error inline"><p><strong>Workspace loading failed:</strong> Network error (HTTP ' + xhr.status + ')</p></div>');
         });
     }
 
