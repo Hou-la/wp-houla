@@ -10,7 +10,7 @@
  * Plugin Name:       Houla - Short Links, QR Codes & Social Commerce
  * Plugin URI:        https://hou.la/
  * Description:       Connect WordPress to Hou.la for automatic short links, QR codes on every post, and optional WooCommerce product sync with your bio page for social selling via Stripe.
- * Version:           1.5.0
+ * Version:           1.5.1
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Hou.la
@@ -33,7 +33,7 @@ if ( ! defined( 'WPINC' ) ) {
 // Constants
 // =========================================================================
 
-define( 'WPHOULA_VERSION', '1.5.0' );
+define( 'WPHOULA_VERSION', '1.5.1' );
 define( 'WPHOULA_DIR', WP_PLUGIN_DIR . '/' . basename( dirname( __FILE__ ) ) );
 define( 'WPHOULA_URL', plugins_url( '/', __FILE__ ) );
 define( 'WPHOULA_BASENAME', plugin_basename( __FILE__ ) );
@@ -43,11 +43,12 @@ define( 'WPHOULA_AUTHORIZED', 'wphoula-authorized' );
 
 // API URLs
 define( 'WPHOULA_DEFAULT_API_URL', 'https://hou.la' );
+define( 'WPHOULA_DEFAULT_FRONTEND_URL', 'https://app.hou.la' );
 define( 'WPHOULA_OAUTH_CLIENT_ID', 'wp-houla' );
 
 // Legacy constants (kept for backward compat — prefer the helper functions below)
 define( 'WPHOULA_API_URL', WPHOULA_DEFAULT_API_URL );
-define( 'WPHOULA_OAUTH_URL', WPHOULA_DEFAULT_API_URL . '/oauth/authorize' );
+define( 'WPHOULA_OAUTH_URL', WPHOULA_DEFAULT_FRONTEND_URL . '/oauth/authorize' );
 define( 'WPHOULA_OAUTH_TOKEN_URL', WPHOULA_DEFAULT_API_URL . '/api/oauth/token' );
 
 /**
@@ -91,11 +92,12 @@ function wphoula_get_api_url() {
  * @return string
  */
 function wphoula_get_oauth_url() {
-    $base = wphoula_get_api_url();
     if ( wphoula_is_dev_mode() ) {
+        $base = wphoula_get_api_url();
         $base = str_replace( 'host.docker.internal', 'localhost', $base );
+        return $base . '/oauth/authorize';
     }
-    return $base . '/oauth/authorize';
+    return WPHOULA_DEFAULT_FRONTEND_URL . '/oauth/authorize';
 }
 
 /**

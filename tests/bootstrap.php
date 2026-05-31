@@ -44,7 +44,7 @@ if ( ! defined( 'WPHOULA_API_URL' ) ) {
     define( 'WPHOULA_API_URL', 'https://hou.la' );
 }
 if ( ! defined( 'WPHOULA_OAUTH_URL' ) ) {
-    define( 'WPHOULA_OAUTH_URL', 'https://hou.la/oauth/authorize' );
+    define( 'WPHOULA_OAUTH_URL', 'https://app.hou.la/oauth/authorize' );
 }
 if ( ! defined( 'WPHOULA_OAUTH_TOKEN_URL' ) ) {
     define( 'WPHOULA_OAUTH_TOKEN_URL', WPHOULA_API_URL . '/api/oauth/token' );
