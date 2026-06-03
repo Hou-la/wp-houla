@@ -118,16 +118,30 @@ class Wp_Houla_Orders {
             }
 
             // ----------------------------------------------------------
-            // Customer / Billing
+            // Customer / Billing / Shipping
             // ----------------------------------------------------------
-            $customer = isset( $data['customer'] ) ? $data['customer'] : array();
-            $address  = isset( $customer['address'] ) ? $customer['address'] : array();
+            $customer         = isset( $data['customer'] ) ? $data['customer'] : array();
+            $address          = isset( $customer['address'] ) ? $customer['address'] : array();
+            $billing_address  = isset( $customer['billing_address'] ) ? $customer['billing_address'] : array();
 
+            // Billing: prefer dedicated billing_address if provided, fall back to shipping address
             $billing = array(
-                'first_name' => $this->safe( $customer, 'first_name' ),
-                'last_name'  => $this->safe( $customer, 'last_name' ),
+                'first_name' => $this->safe( $billing_address, 'first_name', $this->safe( $customer, 'first_name' ) ),
+                'last_name'  => $this->safe( $billing_address, 'last_name', $this->safe( $customer, 'last_name' ) ),
                 'email'      => $this->safe( $customer, 'email' ),
                 'phone'      => $this->safe( $customer, 'phone' ),
+                'address_1'  => $this->safe( $billing_address, 'line1', $this->safe( $address, 'line1' ) ),
+                'address_2'  => $this->safe( $billing_address, 'line2', $this->safe( $address, 'line2' ) ),
+                'city'       => $this->safe( $billing_address, 'city', $this->safe( $address, 'city' ) ),
+                'state'      => $this->safe( $billing_address, 'state', $this->safe( $address, 'state' ) ),
+                'postcode'   => $this->safe( $billing_address, 'postcode', $this->safe( $address, 'postcode' ) ),
+                'country'    => $this->safe( $billing_address, 'country', $this->safe( $address, 'country' ) ),
+            );
+
+            // Shipping: always from the shipping address
+            $shipping = array(
+                'first_name' => $this->safe( $customer, 'first_name' ),
+                'last_name'  => $this->safe( $customer, 'last_name' ),
                 'address_1'  => $this->safe( $address, 'line1' ),
                 'address_2'  => $this->safe( $address, 'line2' ),
                 'city'       => $this->safe( $address, 'city' ),
@@ -137,7 +151,7 @@ class Wp_Houla_Orders {
             );
 
             $order->set_address( $billing, 'billing' );
-            $order->set_address( $billing, 'shipping' );
+            $order->set_address( $shipping, 'shipping' );
 
             // ----------------------------------------------------------
             // Shipping
@@ -167,6 +181,19 @@ class Wp_Houla_Orders {
             if ( ! empty( $data['transaction_id'] ) ) {
                 $order->set_transaction_id( sanitize_text_field( $data['transaction_id'] ) );
                 $order->update_meta_data( '_houla_transaction_id', sanitize_text_field( $data['transaction_id'] ) );
+            }
+
+            // Auction metadata: flag the order as an auction purchase so the
+            // seller understands why the price differs from the listed price.
+            if ( ! empty( $data['purchase_origin'] ) && $data['purchase_origin'] === 'live_auction' ) {
+                $order->update_meta_data( '_houla_purchase_origin', 'live_auction' );
+                if ( ! empty( $data['auction_id'] ) ) {
+                    $order->update_meta_data( '_houla_auction_id', sanitize_text_field( $data['auction_id'] ) );
+                }
+                $order->add_order_note(
+                    '🔨 Commande issue d\'une enchère en direct sur Hou.la. '
+                    . 'Le prix correspond au montant remporté aux enchères et peut différer du prix catalogue.'
+                );
             }
 
             // Test mode indicator
