@@ -1,0 +1,812 @@
+# Italian translation for WP-Houla
+# Copyright (C) 2025 Hou.la
+# This file is distributed under the GPLv2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: WP-Houla 1.0.0\n"
+"Report-Msgid-Bugs-To: hello@hou.la\n"
+"POT-Creation-Date: 2025-02-22 00:00+0000\n"
+"PO-Revision-Date: 2026-06-19 00:00+0000\n"
+"Last-Translator: Hou.la Team <hello@hou.la>\n"
+"Language-Team: Italian <hello@hou.la>\n"
+"Language: it_IT\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: WP-Houla\n"
+
+#. Plugin Name of the plugin
+#: wp-houla.php
+msgid "WP-Houla - Short Links, QR Codes & Social Commerce"
+msgstr "WP-Houla - Link brevi, QR Code e Social Commerce"
+
+#: wp-houla.php
+msgid "Hou.la Pay requires WooCommerce to be installed and active."
+msgstr "Hou.la Pay richiede che WooCommerce sia installato e attivo."
+
+#: includes/class-wp-houla-activator.php
+msgid "Hou.la Pay requires PHP 7.4 or higher."
+msgstr "Hou.la Pay richiede PHP 7.4 o superiore."
+
+#: includes/class-wp-houla-api.php
+msgid "Not connected to Hou.la."
+msgstr "Non sei connesso a Hou.la."
+
+#: includes/class-wp-houla-api.php
+msgid "Authentication failed. Please reconnect."
+msgstr "Autenticazione non riuscita. Riconnettiti."
+
+#: includes/class-wp-houla-webhook.php
+msgid "Missing signature header."
+msgstr "Intestazione della firma mancante."
+
+#: includes/class-wp-houla-webhook.php
+msgid "Webhook secret not configured."
+msgstr "Secret del webhook non configurato."
+
+#: includes/class-wp-houla-webhook.php
+msgid "Invalid signature."
+msgstr "Firma non valida."
+
+#: includes/class-wp-houla-metabox.php
+#: includes/class-wp-houla-post-metabox.php
+#: admin/class-wp-houla-admin.php
+msgid "Permission denied."
+msgstr "Permesso negato."
+
+#: includes/class-wp-houla-metabox.php
+msgid "Product not found."
+msgstr "Prodotto non trovato."
+
+#: includes/class-wp-houla-metabox.php
+msgid "Product not synced."
+msgstr "Prodotto non sincronizzato."
+
+#: includes/class-wp-houla-metabox.php
+#: includes/class-wp-houla-post-metabox.php
+msgid "Hou.la"
+msgstr "Hou.la"
+
+#: admin/class-wp-houla-admin.php
+#: admin/partials/settings-page.php
+msgid "Hou.la Settings"
+msgstr "Impostazioni Hou.la"
+
+#: admin/class-wp-houla-admin.php
+msgid "Settings"
+msgstr "Impostazioni"
+
+#: admin/class-wp-houla-admin.php
+msgid "WP-Houla: Connect your Hou.la account to start syncing products."
+msgstr "WP-Houla: collega il tuo account Hou.la per iniziare a sincronizzare i prodotti."
+
+#: admin/class-wp-houla-admin.php
+msgid "Connect now"
+msgstr "Collega ora"
+
+#: admin/class-wp-houla-admin.php
+msgid "Disconnected from Hou.la."
+msgstr "Disconnesso da Hou.la."
+
+#: admin/class-wp-houla-admin.php
+msgid "Settings saved."
+msgstr "Impostazioni salvate."
+
+#: admin/class-wp-houla-admin.php
+msgid "Syncing..."
+msgstr "Sincronizzazione in corso..."
+
+#: admin/class-wp-houla-admin.php
+msgid "Synced"
+msgstr "Sincronizzato"
+
+#: admin/class-wp-houla-admin.php
+msgid "Sync failed"
+msgstr "Sincronizzazione non riuscita"
+
+#: admin/class-wp-houla-admin.php
+msgid "Are you sure?"
+msgstr "Sei sicuro?"
+
+#: admin/class-wp-houla-admin.php
+msgid "Loading..."
+msgstr "Caricamento..."
+
+#: admin/class-wp-houla-admin.php
+#: admin/partials/settings-page.php
+msgid "Disconnect"
+msgstr "Disconnetti"
+
+#: admin/class-wp-houla-admin.php
+msgid "Disconnecting..."
+msgstr "Disconnessione..."
+
+#: admin/class-wp-houla-admin.php
+#: admin/partials/settings-page.php
+msgid "Save Settings"
+msgstr "Salva"
+
+#: admin/partials/settings-page.php
+msgid "Successfully connected to Hou.la!"
+msgstr "Connessione a Hou.la riuscita!"
+
+#: admin/partials/settings-page.php
+msgid "Connection"
+msgstr "Connessione"
+
+#: admin/partials/settings-page.php
+msgid "Sync"
+msgstr "Sincronizzazione"
+
+#: admin/partials/settings-page.php
+msgid "Orders"
+msgstr "Ordini"
+
+#: admin/partials/settings-page.php
+msgid "Debug"
+msgstr "Debug"
+
+#: admin/partials/settings-page.php
+msgid "Hou.la Account"
+msgstr "Account Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "Status"
+msgstr "Stato"
+
+#: admin/partials/settings-page.php
+msgid "Connected"
+msgstr "Connesso"
+
+#: admin/partials/settings-page.php
+msgid "Workspace"
+msgstr "Spazio di lavoro"
+
+#: admin/partials/settings-page.php
+msgid "Email"
+msgstr "Email"
+
+#: admin/partials/settings-page.php
+msgid "Connect your Hou.la account to sync WooCommerce products and receive orders."
+msgstr "Collega il tuo account Hou.la per sincronizzare i prodotti WooCommerce e ricevere ordini."
+
+#: admin/partials/settings-page.php
+msgid "Connect to Hou.la"
+msgstr "Connettiti a Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "Product Sync"
+msgstr "Sincronizzazione prodotti"
+
+#: admin/partials/settings-page.php
+msgid "Connect your account first to configure sync options."
+msgstr "Collega prima il tuo account per configurare le opzioni di sincronizzazione."
+
+#: admin/partials/settings-page.php
+msgid "Auto-sync"
+msgstr "Sincronizzazione automatica"
+
+#: admin/partials/settings-page.php
+msgid "Automatically sync product changes to Hou.la"
+msgstr "Sincronizza automaticamente le modifiche ai prodotti su Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "Sync on publish"
+msgstr "Sincronizza alla pubblicazione"
+
+#: admin/partials/settings-page.php
+msgid "Sync new products when they are published"
+msgstr "Sincronizza i nuovi prodotti quando vengono pubblicati"
+
+#: admin/partials/settings-page.php
+msgid "Products synced"
+msgstr "Prodotti sincronizzati"
+
+#: admin/partials/settings-page.php
+msgid "Last full sync"
+msgstr "Ultima sincronizzazione completa"
+
+#: admin/partials/settings-page.php
+msgid "Never"
+msgstr "Mai"
+
+#: admin/partials/settings-page.php
+msgid "Sync All Products Now"
+msgstr "Sincronizza tutti i prodotti ora"
+
+#: admin/partials/settings-page.php
+msgid "Orders via Hou.la"
+msgstr "Ordini tramite Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "Connect your account first."
+msgstr "Collega prima il tuo account."
+
+#: admin/partials/settings-page.php
+msgid "Webhook URL"
+msgstr "URL del webhook"
+
+#: admin/partials/settings-page.php
+msgid "This URL is automatically registered with Hou.la."
+msgstr "Questo URL viene registrato automaticamente su Hou.la."
+
+#: admin/partials/settings-page.php
+msgid "Orders received"
+msgstr "Ordini ricevuti"
+
+#: admin/partials/settings-page.php
+msgid "Last order"
+msgstr "Ultimo ordine"
+
+#: admin/partials/settings-page.php
+msgid "None yet"
+msgstr "Nessuno per ora"
+
+#: admin/partials/settings-page.php
+msgid "Orders placed through your Hou.la bio page appear in WooCommerce > Orders with the payment method \"Hou.la Pay (Stripe)\"."
+msgstr "Gli ordini effettuati tramite la tua pagina bio Hou.la appaiono in WooCommerce > Ordini con il metodo di pagamento \"Hou.la Pay (Stripe)\"."
+
+#: admin/partials/settings-page.php
+msgid "Debug Information"
+msgstr "Informazioni di debug"
+
+#: admin/partials/settings-page.php
+msgid "Debug logging"
+msgstr "Registrazione di debug"
+
+#: admin/partials/settings-page.php
+msgid "Enable debug logging (writes to wp-content/debug.log)"
+msgstr "Attiva la registrazione di debug (scrive in wp-content/debug.log)"
+
+#: admin/partials/settings-page.php
+msgid "Plugin version"
+msgstr "Versione del plugin"
+
+#: admin/partials/settings-page.php
+msgid "PHP version"
+msgstr "Versione PHP"
+
+#: admin/partials/settings-page.php
+msgid "WordPress version"
+msgstr "Versione WordPress"
+
+#: admin/partials/settings-page.php
+msgid "WooCommerce version"
+msgstr "Versione WooCommerce"
+
+#: admin/partials/settings-page.php
+msgid "REST API base"
+msgstr "Base API REST"
+
+#: admin/partials/settings-page.php
+msgid "Webhook secret"
+msgstr "Secret del webhook"
+
+#: admin/partials/settings-page.php
+msgid "Not generated"
+msgstr "Non generato"
+
+#: admin/partials/metabox-product.php
+msgid "Synced with Hou.la"
+msgstr "Sincronizzato con Hou.la"
+
+#. translators: %s: datetime
+#: admin/partials/metabox-product.php
+msgid "Last sync: %s"
+msgstr "Ultima sincronizzazione: %s"
+
+#: admin/partials/metabox-product.php
+msgid "Views"
+msgstr "Visualizzazioni"
+
+#: admin/partials/metabox-product.php
+msgid "Clicks"
+msgstr "Clic"
+
+#: admin/partials/metabox-product.php
+msgid "Sales"
+msgstr "Vendite"
+
+#: admin/partials/metabox-product.php
+msgid "Revenue"
+msgstr "Fatturato"
+
+#: admin/partials/metabox-product.php
+msgid "Re-sync"
+msgstr "Risincronizza"
+
+#: admin/partials/metabox-product.php
+msgid "Unsync"
+msgstr "Annulla sincronizzazione"
+
+#: admin/partials/metabox-product.php
+#: includes/class-wp-houla-post-metabox.php
+msgid "Short link"
+msgstr "Link breve"
+
+#: admin/partials/metabox-product.php
+#: includes/class-wp-houla-post-metabox.php
+msgid "Copy"
+msgstr "Copia"
+
+#: admin/partials/metabox-product.php
+#: includes/class-wp-houla-post-metabox.php
+msgid "Download QR"
+msgstr "Scarica il QR"
+
+#: admin/partials/metabox-product.php
+msgid "Not synced with Hou.la"
+msgstr "Non sincronizzato con Hou.la"
+
+#: admin/partials/metabox-product.php
+msgid "Push this product to Hou.la to display it on your bio page."
+msgstr "Invia questo prodotto a Hou.la per mostrarlo sulla tua pagina bio."
+
+#: admin/partials/metabox-product.php
+msgid "Sync to Hou.la"
+msgstr "Sincronizza su Hou.la"
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "Total clicks"
+msgstr "Clic totali"
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "Today"
+msgstr "Oggi"
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "QR scans"
+msgstr "Scansioni QR"
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "Regenerate"
+msgstr "Rigenera"
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "No Hou.la short link yet."
+msgstr "Ancora nessun link breve Hou.la."
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "Generate short link"
+msgstr "Genera link breve"
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "A Hou.la short link will be generated when this post is published."
+msgstr "Un link breve Hou.la verrà generato quando questo articolo verrà pubblicato."
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "Invalid post ID."
+msgstr "ID articolo non valido."
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "Failed to generate short link."
+msgstr "Generazione del link breve non riuscita."
+
+#: includes/class-wp-houla-post-metabox.php
+msgid "No link found."
+msgstr "Nessun link trovato."
+
+#: includes/class-wp-houla-orders.php
+msgid "Order received via Hou.la Pay."
+msgstr "Ordine ricevuto tramite Hou.la Pay."
+
+#: includes/class-wp-houla-orders.php
+msgid "Refunded via Hou.la."
+msgstr "Rimborsato tramite Hou.la."
+
+# =====================================================================
+# Short Links & QR Code tab
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Short Links & QR Code"
+msgstr "Link brevi e QR Code"
+
+#: admin/partials/settings-page.php
+msgid "Shortlink Settings"
+msgstr "Impostazioni dei link brevi"
+
+#: admin/partials/settings-page.php
+msgid "Configure which content types get automatic Hou.la short links and QR codes."
+msgstr "Configura quali tipi di contenuto ottengono automaticamente link brevi e QR code Hou.la."
+
+#: admin/partials/settings-page.php
+msgid "Post types"
+msgstr "Tipi di contenuto"
+
+#: admin/partials/settings-page.php
+msgid "Short links and QR codes will be generated for selected post types."
+msgstr "I link brevi e i QR code verranno generati per i tipi di contenuto selezionati."
+
+#: admin/partials/settings-page.php
+msgid "Connect your Hou.la account to generate short links and QR codes for your posts."
+msgstr "Collega il tuo account Hou.la per generare link brevi e QR code per i tuoi articoli."
+
+# =====================================================================
+# Synced Products
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Synced Products"
+msgstr "Prodotti sincronizzati"
+
+#: admin/partials/settings-page.php
+msgid "Products currently synchronized on Hou.la from this WooCommerce store."
+msgstr "Prodotti attualmente sincronizzati su Hou.la da questo negozio WooCommerce."
+
+#: admin/partials/settings-page.php
+msgid "Loading synced products..."
+msgstr "Caricamento dei prodotti sincronizzati..."
+
+#: admin/partials/settings-page.php
+msgid "Product"
+msgstr "Prodotto"
+
+#: admin/partials/settings-page.php
+msgid "WC Price"
+msgstr "Prezzo WC"
+
+#: admin/partials/settings-page.php
+msgid "Hou.la Price"
+msgstr "Prezzo Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "Stock"
+msgstr "Scorte"
+
+#: admin/partials/settings-page.php
+msgid "Last synced"
+msgstr "Ultima sincronizzazione"
+
+#: admin/partials/settings-page.php
+msgid "No products synced yet. Click \"Sync All Products Now\" to start."
+msgstr "Nessun prodotto ancora sincronizzato. Fai clic su \"Sincronizza tutti i prodotti ora\" per iniziare."
+
+#: admin/partials/settings-page.php
+msgid "Shop not activated"
+msgstr "Negozio non attivato"
+
+#: admin/partials/settings-page.php
+msgid "Your Hou.la shop is not activated yet. Please connect Stripe on your Hou.la dashboard (Manager > Shop) before syncing products."
+msgstr "Il tuo negozio Hou.la non è ancora attivato. Collega Stripe dalla tua dashboard Hou.la (Manager > Negozio) prima di sincronizzare i prodotti."
+
+# =====================================================================
+# Status Concordance
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Status Concordance"
+msgstr "Corrispondenza degli stati"
+
+#: admin/partials/settings-page.php
+msgid "Define how each WooCommerce order status maps to a Hou.la status. This mapping is used in both directions (WooCommerce → Hou.la and Hou.la → WooCommerce)."
+msgstr "Definisci la corrispondenza tra ogni stato dell'ordine WooCommerce e uno stato Hou.la. Questa corrispondenza viene usata in entrambe le direzioni (WooCommerce → Hou.la e Hou.la → WooCommerce)."
+
+#: admin/partials/settings-page.php
+msgid "Hou.la Status"
+msgstr "Stato Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "WooCommerce Status"
+msgstr "Stato WooCommerce"
+
+#: admin/partials/settings-page.php
+msgid "Pending"
+msgstr "In attesa"
+
+#: admin/partials/settings-page.php
+msgid "Paid"
+msgstr "Pagato"
+
+#: admin/partials/settings-page.php
+msgid "Processing"
+msgstr "In lavorazione"
+
+#: admin/partials/settings-page.php
+msgid "Shipped"
+msgstr "Spedito"
+
+#: admin/partials/settings-page.php
+msgid "Delivered"
+msgstr "Consegnato"
+
+#: admin/partials/settings-page.php
+msgid "Cancelled"
+msgstr "Annullato"
+
+#: admin/partials/settings-page.php
+msgid "Refunded"
+msgstr "Rimborsato"
+
+#: admin/partials/settings-page.php
+msgid "— Not mapped —"
+msgstr "— Non associato —"
+
+# =====================================================================
+# Tracking Sync
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Tracking Sync"
+msgstr "Sincronizzazione del tracking"
+
+#: admin/partials/settings-page.php
+msgid "When a tracking number is added to a WooCommerce order, it will be automatically sent to Hou.la so buyers can track their shipment."
+msgstr "Quando un numero di tracking viene aggiunto a un ordine WooCommerce, verrà inviato automaticamente a Hou.la così gli acquirenti potranno seguire la spedizione."
+
+#: admin/partials/settings-page.php
+msgid "Auto-sync tracking"
+msgstr "Sincronizzazione automatica del tracking"
+
+#: admin/partials/settings-page.php
+msgid "Automatically push tracking numbers to Hou.la when added in WooCommerce"
+msgstr "Invia automaticamente i numeri di tracking a Hou.la quando vengono aggiunti in WooCommerce"
+
+#: admin/partials/settings-page.php
+msgid "Supported plugins"
+msgstr "Plugin supportati"
+
+#: admin/partials/settings-page.php
+msgid "Advanced Shipment Tracking (AST)"
+msgstr "Advanced Shipment Tracking (AST)"
+
+#: admin/partials/settings-page.php
+msgid "WooCommerce Shipment Tracking"
+msgstr "WooCommerce Shipment Tracking"
+
+#: admin/partials/settings-page.php
+msgid "YITH WooCommerce Order Tracking"
+msgstr "YITH WooCommerce Order Tracking"
+
+#: admin/partials/settings-page.php
+msgid "Or any plugin storing tracking in order meta"
+msgstr "O qualsiasi plugin che salva il tracking nei meta dell'ordine"
+
+#: admin/partials/settings-page.php
+msgid "Tracking links are generated automatically for major carriers (Colissimo, DPD, GLS, Chronopost, UPS, FedEx, DHL, etc.)."
+msgstr "I link di tracking vengono generati automaticamente per i principali corrieri (Colissimo, DPD, GLS, Chronopost, UPS, FedEx, DHL, ecc.)."
+
+# =====================================================================
+# Orders tab extras
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "API URL: %s"
+msgstr "URL API: %s"
+
+#: admin/partials/settings-page.php
+msgid "To disable: remove WPHOULA_DEV_MODE from wp-config.php and clear api_url."
+msgstr "Per disattivare: rimuovi WPHOULA_DEV_MODE da wp-config.php e svuota api_url."
+
+#: admin/partials/settings-page.php
+msgid "Custom API URL for development. Leave empty for production (https://hou.la)."
+msgstr "URL API personalizzato per lo sviluppo. Lascia vuoto per la produzione (https://hou.la)."
+
+#: admin/partials/settings-page.php
+msgid "OAuth + all API calls will use this URL. Example: https://xxx.ngrok-free.dev"
+msgstr "OAuth + tutte le chiamate API useranno questo URL. Esempio: https://xxx.ngrok-free.dev"
+
+#: admin/class-wp-houla-admin.php
+msgid "Your Hou.la shop is not activated. Please connect Stripe on Hou.la first."
+msgstr "Il tuo negozio Hou.la non è attivato. Collega prima Stripe su Hou.la."
+
+#: admin/partials/settings-page.php
+msgid "Hou.la Collection"
+msgstr "Collezione Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "- Not mapped -"
+msgstr "- Non associato -"
+
+#: admin/partials/settings-page.php
+msgid "Auto-create collections from categories"
+msgstr "Crea automaticamente le collezioni dalle categorie"
+
+#: admin/partials/settings-page.php
+msgid "Auto-create will create a Hou.la collection for each WooCommerce category and map them automatically."
+msgstr "La creazione automatica creerà una collezione Hou.la per ogni categoria WooCommerce e le assocerà automaticamente."
+
+#: admin/partials/settings-page.php
+msgid "products"
+msgstr "prodotti"
+
+#: admin/partials/settings-page.php
+msgid "Category filter"
+msgstr "Filtro per categoria"
+
+#: admin/partials/settings-page.php
+msgid "No WooCommerce categories found."
+msgstr "Nessuna categoria WooCommerce trovata."
+
+#: admin/partials/settings-page.php
+msgid "Select which categories to sync. Leave all unchecked to sync all products."
+msgstr "Seleziona le categorie da sincronizzare. Lascia tutto deselezionato per sincronizzare tutti i prodotti."
+
+# =====================================================================
+# Price Adjustment
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Price Adjustment"
+msgstr "Aggiustamento dei prezzi"
+
+#: admin/partials/settings-page.php
+msgid "Apply a price markup or discount when syncing to Hou.la. Useful to set different prices on your bio page."
+msgstr "Applica un aumento o uno sconto di prezzo durante la sincronizzazione su Hou.la. Utile per impostare prezzi diversi sulla tua pagina bio."
+
+#: admin/partials/settings-page.php
+msgid "Adjustment type"
+msgstr "Tipo di aggiustamento"
+
+#: admin/partials/settings-page.php
+msgid "No adjustment (sync original prices)"
+msgstr "Nessun aggiustamento (sincronizza i prezzi originali)"
+
+#: admin/partials/settings-page.php
+msgid "Markup by percentage (+%)"
+msgstr "Aumento percentuale (+%)"
+
+#: admin/partials/settings-page.php
+msgid "Discount by percentage (-%)"
+msgstr "Sconto percentuale (-%)"
+
+#: admin/partials/settings-page.php
+msgid "Markup by fixed amount (+)"
+msgstr "Aumento di importo fisso (+)"
+
+#: admin/partials/settings-page.php
+msgid "Discount by fixed amount (-)"
+msgstr "Sconto di importo fisso (-)"
+
+#: admin/partials/settings-page.php
+msgid "Value"
+msgstr "Valore"
+
+# =====================================================================
+# Category - Collection Mapping
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Category - Collection Mapping"
+msgstr "Corrispondenza categorie - collezioni"
+
+#: admin/partials/settings-page.php
+msgid "Map your WooCommerce categories to Hou.la collections. Products will be automatically placed in the matching collection during sync."
+msgstr "Associa le tue categorie WooCommerce alle collezioni Hou.la. I prodotti verranno collocati automaticamente nella collezione corrispondente durante la sincronizzazione."
+
+#: admin/partials/settings-page.php
+msgid "WooCommerce Category"
+msgstr "Categoria WooCommerce"
+
+# =====================================================================
+# Shortlink Settings (Connection tab extras)
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Current: %s"
+msgstr "Attuale: %s"
+
+#: admin/partials/settings-page.php
+msgid "Dev mode tips: use an ngrok URL, local IP (e.g. http://192.168.1.100:53001), or http://localhost:53001 if WP runs locally too."
+msgstr "Suggerimenti dev: usa un URL ngrok, un IP locale (es. http://192.168.1.100:53001), oppure http://localhost:53001 se anche WP è in locale."
+
+# =====================================================================
+# Order Synchronization
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Order Synchronization"
+msgstr "Sincronizzazione degli ordini"
+
+#: admin/partials/settings-page.php
+msgid "Resynchronize order statuses between WooCommerce and Hou.la. Use this if some orders failed to sync or were created before the plugin was connected."
+msgstr "Risincronizza gli stati degli ordini tra WooCommerce e Hou.la. Usalo se alcuni ordini non sono stati sincronizzati o sono stati creati prima del collegamento del plugin."
+
+#: admin/partials/settings-page.php
+msgid "Retry failed orders"
+msgstr "Riprova gli ordini non riusciti"
+
+#: admin/partials/settings-page.php
+msgid "Resync all orders"
+msgstr "Risincronizza tutti gli ordini"
+
+#: admin/class-wp-houla-admin.php
+msgid "Total Hou.la orders"
+msgstr "Totale ordini Hou.la"
+
+#: admin/class-wp-houla-admin.php
+msgid "Invalid order ID."
+msgstr "ID ordine non valido."
+
+#: admin/class-wp-houla-admin.php
+msgid "Order synced successfully."
+msgstr "Ordine sincronizzato con successo."
+
+#: admin/class-wp-houla-admin.php
+msgid "Retry sync"
+msgstr "Riprova la sincronizzazione"
+
+#: admin/class-wp-houla-admin.php
+msgid "Pending sync"
+msgstr "Sincronizzazione in attesa"
+
+#: admin/class-wp-houla-admin.php
+msgid "Sync now"
+msgstr "Sincronizza ora"
+
+# =====================================================================
+# Pull orders & JS messages
+# =====================================================================
+
+#: admin/partials/settings-page.php
+msgid "Pull orders from Hou.la"
+msgstr "Recupera gli ordini da Hou.la"
+
+#: admin/partials/settings-page.php
+msgid "\"Pull orders\" fetches all orders from Hou.la and creates/updates them in WooCommerce. Use this when orders were missed (e.g. server was offline)."
+msgstr "\"Recupera ordini\" scarica tutti gli ordini da Hou.la e li crea/aggiorna in WooCommerce. Usalo quando alcuni ordini sono stati persi (es. server offline)."
+
+#: admin/class-wp-houla-admin.php
+msgid "Pulling orders from Hou.la..."
+msgstr "Recupero degli ordini da Hou.la..."
+
+#: admin/class-wp-houla-admin.php
+msgid "%d synced"
+msgstr "%d sincronizzati"
+
+#: admin/class-wp-houla-admin.php
+msgid "%d failed"
+msgstr "%d non riusciti"
+
+#: admin/class-wp-houla-admin.php
+msgid "%d skipped"
+msgstr "%d ignorati"
+
+#: admin/class-wp-houla-admin.php
+msgid "(%d total)"
+msgstr "(%d in totale)"
+
+#: admin/class-wp-houla-admin.php
+msgid "Error:"
+msgstr "Errore:"
+
+# =====================================================================
+# JS i18n strings
+# =====================================================================
+
+#: admin/class-wp-houla-admin.php
+msgid "Creating collections..."
+msgstr "Creazione delle collezioni..."
+
+#: admin/class-wp-houla-admin.php
+msgid " collections created, "
+msgstr " collezioni create, "
+
+#: admin/class-wp-houla-admin.php
+msgid " mapped."
+msgstr " associate."
+
+#: admin/class-wp-houla-admin.php
+msgid "Error"
+msgstr "Errore"
+
+#: admin/class-wp-houla-admin.php
+msgid "Network error"
+msgstr "Errore di rete"
+
+#: admin/class-wp-houla-admin.php
+msgid "This will clear all sync metadata. You will need to re-sync all products. Continue?"
+msgstr "Questo cancellerà tutti i metadati di sincronizzazione. Dovrai risincronizzare tutti i prodotti. Continuare?"
+
+#: admin/class-wp-houla-admin.php
+msgid "Reset Sync Data"
+msgstr "Reimposta i dati di sincronizzazione"
+
+#: admin/class-wp-houla-admin.php
+msgid "Sync data reset (%d entries cleared). You can now re-sync your products."
+msgstr "Dati di sincronizzazione reimpostati (%d voci cancellate). Ora puoi risincronizzare i tuoi prodotti."
+
+#: admin/class-wp-houla-admin.php
+msgid "Not connected to Hou.la. Please reconnect in the Connection tab."
+msgstr "Non sei connesso a Hou.la. Riconnettiti nella scheda Connessione."
