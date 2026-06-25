@@ -18,6 +18,13 @@ class ActivatorTest extends TestCase {
         // Create the log directory so real is_dir() returns true and the
         // log-creation block is skipped in tests that don't need it.
         @\mkdir( WPHOULA_DIR . '/log', 0755, true );
+
+        // WP-Cron scheduling functions called by activate()/deactivate()
+        // (wphoula_cron_sync). Stub them so the unit tests don't hit
+        // "Call to undefined function wp_next_scheduled()".
+        Functions\when( 'wp_next_scheduled' )->justReturn( false );
+        Functions\when( 'wp_schedule_event' )->justReturn( true );
+        Functions\when( 'wp_clear_scheduled_hook' )->justReturn( true );
     }
 
     protected function tearDown(): void {
