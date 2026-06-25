@@ -86,6 +86,9 @@ class ActivatorTest extends TestCase {
 
         Functions\when( 'get_option' )->justReturn( array( 'webhook_secret' => 'existing' ) );
         Functions\when( 'flush_rewrite_rules' )->justReturn( true );
+        // activate() always persists options (line 38); this test focuses on
+        // the log-dir creation, so stub update_option as a no-op.
+        Functions\when( 'update_option' )->justReturn( true );
         Functions\expect( 'wp_mkdir_p' )
             ->once()
             ->with( \Mockery::type( 'string' ) )
