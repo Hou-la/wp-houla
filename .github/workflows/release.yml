@@ -49,6 +49,11 @@ jobs:
           cd ..
           rm -rf build
 
+          # Stable-named copy so the website can link to the latest build with a
+          # fixed URL that never changes across versions:
+          #   https://github.com/houla/wp-houla/releases/latest/download/wp-houla.zip
+          cp wp-houla-${{ steps.version.outputs.version }}.zip wp-houla.zip
+
           echo "Package size: $(du -h wp-houla-${{ steps.version.outputs.version }}.zip | cut -f1)"
 
       - name: Upload zip to release
@@ -56,4 +61,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: wp-houla-${{ steps.version.outputs.version }}.zip
+          files: |
+            wp-houla-${{ steps.version.outputs.version }}.zip
+            wp-houla.zip

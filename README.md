@@ -117,7 +117,7 @@ A Hou.la account (free or Pro) is required. Create an account at [hou.la](https:
 
 ### From a ZIP file
 
-1. Download the latest release from [GitHub Releases](https://github.com/MikhaelGerbet/wp-houla/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/houla/wp-houla/releases)
 2. In the WordPress admin, go to **Plugins > Add New**
 3. Click **Upload Plugin**
 4. Select the `wp-houla-x.x.x.zip` file
@@ -127,7 +127,7 @@ A Hou.la account (free or Pro) is required. Create an account at [hou.la](https:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/MikhaelGerbet/wp-houla.git
+   git clone https://github.com/houla/wp-houla.git
    ```
 2. Copy the repository folder to `wp-content/plugins/wp-houla/`
 3. Activate the plugin from the **Plugins** menu
@@ -537,7 +537,7 @@ composer run phpcs
 ## Support
 
 - Website: [hou.la](https://hou.la)
-- Report a bug: [GitHub Issues](https://github.com/MikhaelGerbet/wp-houla/issues)
+- Report a bug: [GitHub Issues](https://github.com/houla/wp-houla/issues)
 - Email: hello@hou.la
 
 ---
