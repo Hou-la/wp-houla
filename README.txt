@@ -1,23 +1,23 @@
-=== Houla - Short Links, QR Codes, Link in Bio & Social Commerce ===
+=== Houla - Sync WooCommerce with Hou.la (Marketplace & Live Shopping) ===
 Contributors: mikhaelgerbet
 Donate link: https://hou.la
-Tags: short links, qr code, url shortener, woocommerce, link in bio
+Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.5.1
+Stable tag: 1.5.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
 WC tested up to: 9.0
 
-Tracked short links, QR codes & link-in-bio for every post. Sell WooCommerce products from Instagram, TikTok or X.
+Two-way WooCommerce product and order sync with the Hou.la marketplace and live shopping. Short links and QR codes included as a bonus.
 
 == Description ==
 
-Houla connects your WordPress site to [Hou.la](https://hou.la) and gives you four capabilities in a single plugin: **short links**, **QR codes**, a **link-in-bio page**, and **social commerce** through WooCommerce.
+Houla connects your WooCommerce store to [Hou.la](https://hou.la) - the social network, content-creation and **live-shopping marketplace**. Its core job is a **two-way sync**: your WooCommerce products appear on Hou.la (marketplace and live shopping) and stay in sync both ways, while orders placed on Hou.la flow back into WooCommerce with full stock management.
 
-Every published post, page, or product automatically gets a tracked short URL and a downloadable QR code. Click and scan statistics appear right inside the WordPress editor. If you run a WooCommerce store, your products sync to a customizable bio page where visitors can browse, add to cart, and pay via Stripe - without leaving their social feed. Orders are pushed back to WooCommerce in real time with full stock management.
+Sell your existing catalog during your lives and on the marketplace without recreating it - price, stock, photos and descriptions stay in sync everywhere in real time, from the WordPress admin you already use. As a **bonus**, every published post or product can also get a tracked short link and a QR code, with click and scan stats inside the editor.
 
 No separate e-commerce setup required. No third-party checkout to configure. Connect your Hou.la account, and the plugin handles everything from link creation to order fulfillment.
 
@@ -221,6 +221,10 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.5.2 - 2026-07-03 =
+* Repositioned around the core: two-way WooCommerce <-> Hou.la product & order sync for the marketplace and live shopping (short links & QR codes are a bonus)
+* Moved the repository to the Hou-la GitHub organization
 
 = 1.5.0 - 2026-05-30 =
 * Version alignment and stability improvements

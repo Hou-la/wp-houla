@@ -1,6 +1,6 @@
-# WP-Houla - Short Links, QR Codes & Social Commerce for WordPress
+# WP-Houla - Sync WooCommerce with the Hou.la Marketplace & Live Shopping
 
-Connect your WordPress site to [Hou.la](https://hou.la) to automatically generate short links and QR codes on every published content, and synchronize your WooCommerce catalog with your bio page for social selling.
+Connect your WooCommerce store to [Hou.la](https://hou.la) - the social network, content-creation and live-shopping marketplace. Your products stay in sync **both ways**, and orders placed on Hou.la (marketplace or live) flow back into WooCommerce with full stock management. Short links and QR codes are included as a bonus.
 
 ---
 
