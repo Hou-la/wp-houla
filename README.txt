@@ -127,8 +127,8 @@ Relevant policies:
 
 * [Hou.la website](https://hou.la)
 * [API documentation](https://hou.la/api-documentation)
-* [Source code on GitHub](https://github.com/houla/wp-houla)
-* [Report a bug](https://github.com/houla/wp-houla/issues)
+* [Source code on GitHub](https://github.com/Hou-la/wp-houla)
+* [Report a bug](https://github.com/Hou-la/wp-houla/issues)
 * [Email support](mailto:hello@hou.la)
 
 == Installation ==
@@ -141,7 +141,7 @@ Relevant policies:
 
 = Manual Installation =
 
-1. Download the latest `.zip` from [GitHub Releases](https://github.com/houla/wp-houla/releases)
+1. Download the latest `.zip` from [GitHub Releases](https://github.com/Hou-la/wp-houla/releases)
 2. Go to **Plugins > Add New > Upload Plugin**
 3. Upload the zip file and click **Install Now**
 4. Activate the plugin
@@ -208,7 +208,7 @@ Plugin settings are stored in `wp_options` under the key `wphoula-options`. Per-
 
 = Where can I get support? =
 
-Open an issue on the [GitHub repository](https://github.com/houla/wp-houla/issues) or email [hello@hou.la](mailto:hello@hou.la).
+Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issues) or email [hello@hou.la](mailto:hello@hou.la).
 
 == Screenshots ==
 
