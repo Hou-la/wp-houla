@@ -41,6 +41,23 @@ if ( ! defined( 'ABSPATH' ) ) {
             <?php esc_html_e( 'Synced with Hou.la', 'wp-houla' ); ?>
         </p>
 
+        <?php if ( ! empty( $buyer_name ) || ! empty( $buyer_avatar ) ) : ?>
+        <!-- Buyer Hou.la workspace identity -->
+        <div class="wphoula-order-metabox__buyer">
+            <?php if ( ! empty( $buyer_avatar ) ) : ?>
+                <img class="wphoula-buyer-avatar" src="<?php echo esc_url( $buyer_avatar ); ?>" width="40" height="40" alt="" loading="lazy">
+            <?php endif; ?>
+            <div class="wphoula-buyer-id">
+                <?php if ( ! empty( $buyer_name ) ) : ?>
+                    <strong><?php echo esc_html( $buyer_name ); ?></strong>
+                <?php endif; ?>
+                <?php if ( ! empty( $buyer_handle ) ) : ?>
+                    <span class="wphoula-buyer-handle">@<?php echo esc_html( $buyer_handle ); ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Loading indicator (shown during AJAX) -->
         <div class="wphoula-order-metabox__loading" id="wphoula-label-loading" style="display:none;">
             <span class="spinner is-active" style="float:none;margin:0 8px 0 0;"></span>
@@ -125,6 +142,32 @@ if ( ! defined( 'ABSPATH' ) ) {
         padding: 6px 10px;
         border-radius: 4px;
         border-left: 3px solid #3b82f6;
+    }
+    .wphoula-order-metabox__buyer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 8px 0;
+        padding: 8px 10px;
+        background: #f8fafc;
+        border-radius: 6px;
+    }
+    .wphoula-buyer-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex: 0 0 auto;
+    }
+    .wphoula-buyer-id {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+        min-width: 0;
+    }
+    .wphoula-buyer-handle {
+        color: #64748b;
+        font-size: 12px;
     }
     .wphoula-order-metabox__format {
         margin: 8px 0;

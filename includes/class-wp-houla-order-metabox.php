@@ -395,6 +395,11 @@ class Wp_Houla_Order_Metabox {
         $has_label       = $order->get_meta( '_houla_has_label' ) === '1';
         $nonce           = wp_create_nonce( 'wphoula_order_metabox' );
 
+        // Buyer's Hou.la workspace identity (pseudo / display name / avatar).
+        $buyer_name     = $order->get_meta( '_houla_buyer_display_name' );
+        $buyer_handle   = $order->get_meta( '_houla_buyer_handle' );
+        $buyer_avatar   = $order->get_meta( '_houla_buyer_avatar' );
+
         include plugin_dir_path( dirname( __FILE__ ) ) . 'admin/partials/metabox-order.php';
     }
 }

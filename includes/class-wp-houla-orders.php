@@ -153,6 +153,9 @@ class Wp_Houla_Orders {
             $order->set_address( $billing, 'billing' );
             $order->set_address( $shipping, 'shipping' );
 
+            // Buyer workspace identity (pseudo / display name / avatar).
+            $this->apply_buyer_identity( $order, $customer );
+
             // ----------------------------------------------------------
             // Shipping
             // ----------------------------------------------------------
@@ -242,6 +245,14 @@ class Wp_Houla_Orders {
                     isset( $customer['last_name'] ) ? $customer['last_name'] : '',
                 ) );
                 $note_lines[] = 'Client : ' . ( ! empty( $name_parts ) ? implode( ' ', $name_parts ) . ' — ' : '' ) . sanitize_email( $customer['email'] );
+            }
+            // Buyer's Hou.la workspace identity (display name + @handle).
+            if ( ! empty( $customer['display_name'] ) || ! empty( $customer['social_handle'] ) ) {
+                $ident = ! empty( $customer['display_name'] ) ? sanitize_text_field( $customer['display_name'] ) : '';
+                if ( ! empty( $customer['social_handle'] ) ) {
+                    $ident .= ' (@' . sanitize_text_field( $customer['social_handle'] ) . ')';
+                }
+                $note_lines[] = 'Profil Hou.la : ' . trim( $ident );
             }
             $note_lines[] = '';
             foreach ( $data['items'] as $item ) {
@@ -409,6 +420,9 @@ class Wp_Houla_Orders {
 
             $order->set_address( $billing, 'billing' );
             $order->set_address( $billing, 'shipping' );
+
+            // Buyer workspace identity (pseudo / display name / avatar).
+            $this->apply_buyer_identity( $order, $customer );
 
             // ----------------------------------------------------------
             // Update metadata
@@ -689,6 +703,43 @@ class Wp_Houla_Orders {
      */
     private function safe( $arr, $key, $default = '' ) {
         return isset( $arr[ $key ] ) ? sanitize_text_field( $arr[ $key ] ) : $default;
+    }
+
+    /**
+     * Persist and surface the buyer's Hou.la workspace identity.
+     *
+     * Hou.la buyers are identified by their workspace (display name, @handle,
+     * avatar), not by a shipping name — on live / open-cart purchases there is
+     * often no name or address at all. WooCommerce has no native field for a
+     * pseudo or avatar, so we store them as order meta (rendered in the Hou.la
+     * order metabox) and fall the billing name back to the display name so the
+     * order is never attributed to a blank "Invité" customer.
+     *
+     * @param WC_Order $order
+     * @param array    $customer Webhook customer block.
+     */
+    private function apply_buyer_identity( $order, $customer ) {
+        $display_name = $this->safe( $customer, 'display_name' );
+        $handle       = $this->safe( $customer, 'social_handle' );
+        $slug         = $this->safe( $customer, 'workspace_slug' );
+        $avatar       = ! empty( $customer['avatar_url'] ) ? esc_url_raw( $customer['avatar_url'] ) : '';
+
+        if ( $display_name !== '' ) {
+            $order->update_meta_data( '_houla_buyer_display_name', $display_name );
+            // No real name captured → show the workspace identity as the customer.
+            if ( $order->get_billing_first_name() === '' && $order->get_billing_last_name() === '' ) {
+                $order->set_billing_first_name( $display_name );
+            }
+        }
+        if ( $handle !== '' ) {
+            $order->update_meta_data( '_houla_buyer_handle', $handle );
+        }
+        if ( $slug !== '' ) {
+            $order->update_meta_data( '_houla_buyer_slug', $slug );
+        }
+        if ( $avatar !== '' ) {
+            $order->update_meta_data( '_houla_buyer_avatar', $avatar );
+        }
     }
 
     /**
