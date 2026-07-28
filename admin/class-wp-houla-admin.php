@@ -1376,6 +1376,26 @@ class Wp_Houla_Admin {
         }
     }
 
+    /**
+     * Render the WooCommerce "Origine" column as a bare "Hou.la" for orders we
+     * attributed to Hou.la. WooCommerce's get_origin_label() builds the label from
+     * the source_type (we set 'referral' → "Referral: %s") and formats the source
+     * via ucfirst(trim($source,'()')) → "Hou.la". Returning a prefix-less '%s'
+     * template makes the column render just "Hou.la". Guarded to only touch our own
+     * orders (utm_source === 'Hou.la'); everything else is left untouched.
+     *
+     * @param string $label       The origin label template (may contain %s).
+     * @param string $source_type The attribution source type.
+     * @param string $source      The attribution source value (utm_source).
+     * @return string
+     */
+    public function filter_houla_origin_label( $label, $source_type, $source ) {
+        if ( is_string( $source ) && strcasecmp( trim( $source ), 'hou.la' ) === 0 ) {
+            return '%s';
+        }
+        return $label;
+    }
+
     // =====================================================================
     // Dashboard widget
     // =====================================================================

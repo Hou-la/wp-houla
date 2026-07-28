@@ -153,6 +153,10 @@ class Wp_Houla {
             $this->loader->add_filter( 'manage_edit-shop_order_columns', $admin, 'add_orders_column' );
             $this->loader->add_action( 'manage_shop_order_posts_custom_column', $admin, 'render_orders_column', 10, 2 );
 
+            // Render the WooCommerce "Origine" column as a bare "Hou.la" (strip the
+            // "Referral:" prefix) for orders we attributed to Hou.la.
+            $this->loader->add_filter( 'wc_order_attribution_origin_label', $admin, 'filter_houla_origin_label', 10, 3 );
+
             // Metabox on WooCommerce products
             $this->loader->add_action( 'add_meta_boxes', $metabox, 'register_metabox' );
 

@@ -1195,6 +1195,21 @@ class Wp_Houla_Sync {
             }
         }
 
+        // Do NOT push a spurious close of a still-open cart back to Hou.la. Store
+        // automations (virtual-product auto-complete, or shipping plugins moving paid
+        // orders to 'processing') flip wc-open-cart → completed/processing with no real
+        // shipment; forwarding that would close the buyer's open cart on Hou.la and force
+        // them to re-pay shipping on their next purchase. A genuine shipment (tracking
+        // present) or a terminal cancel/refund is still forwarded normally.
+        if ( in_array( $old_status, array( 'open-cart', 'wc-open-cart' ), true ) ) {
+            $is_terminal  = in_array( $houla_status, array( 'cancelled', 'refunded' ), true );
+            $has_tracking = ! empty( $payload['tracking_number'] );
+            if ( ! $is_terminal && ! $has_tracking ) {
+                $this->log( 'Order #' . $order_id . ': suppressing spurious open-cart close (' . $old_status . ' → ' . $new_status . ', no tracking).' );
+                return;
+            }
+        }
+
         $result = $this->api->patch(
             '/ecommerce/orders/' . $houla_order_id . '/status',
             $payload

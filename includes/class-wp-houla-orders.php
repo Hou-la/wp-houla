@@ -156,6 +156,9 @@ class Wp_Houla_Orders {
             // Buyer workspace identity (pseudo / display name / avatar).
             $this->apply_buyer_identity( $order, $customer );
 
+            // Attribute this order to Hou.la in the WooCommerce "Origin" column.
+            $this->apply_order_origin( $order );
+
             // ----------------------------------------------------------
             // Shipping
             // ----------------------------------------------------------
@@ -423,6 +426,9 @@ class Wp_Houla_Orders {
 
             // Buyer workspace identity (pseudo / display name / avatar).
             $this->apply_buyer_identity( $order, $customer );
+
+            // Attribute this order to Hou.la in the WooCommerce "Origin" column.
+            $this->apply_order_origin( $order );
 
             // ----------------------------------------------------------
             // Update metadata
@@ -740,6 +746,25 @@ class Wp_Houla_Orders {
         if ( $avatar !== '' ) {
             $order->update_meta_data( '_houla_buyer_avatar', $avatar );
         }
+    }
+
+    /**
+     * Attribute the order to Hou.la for the native WooCommerce "Origine" column.
+     *
+     * That column (WooCommerce Order Attribution) reads _wc_order_attribution_source_type
+     * and _wc_order_attribution_utm_source and formats them via get_origin_label(). An
+     * order created programmatically via wc_create_order() sets neither, so it shows
+     * "Inconnu"/"Unknown". We stamp them so it renders "Hou.la" (bare, via the companion
+     * label filter registered in Wp_Houla_Admin) or "Referral: Hou.la" otherwise.
+     * update_meta_data() is HPOS-safe (writes wc_orders_meta or postmeta).
+     *
+     * @param WC_Order $order
+     */
+    private function apply_order_origin( $order ) {
+        $order->update_meta_data( '_wc_order_attribution_source_type', 'referral' );
+        $order->update_meta_data( '_wc_order_attribution_utm_source', 'Hou.la' );
+        $order->update_meta_data( '_wc_order_attribution_utm_medium', 'marketplace' );
+        $order->update_meta_data( '_wc_order_attribution_referrer', 'https://hou.la' );
     }
 
     /**
