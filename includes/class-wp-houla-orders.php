@@ -257,6 +257,20 @@ class Wp_Houla_Orders {
                 }
                 $note_lines[] = 'Profil Hou.la : ' . trim( $ident );
             }
+            // Sendcloud service point (Mondial Relay / locker) — where the parcel ships.
+            if ( ! empty( $customer['service_point'] ) && is_array( $customer['service_point'] ) ) {
+                $sp = $customer['service_point'];
+                $sp_bits = array();
+                if ( ! empty( $sp['method'] ) ) { $sp_bits[] = sanitize_text_field( $sp['method'] ); }
+                if ( ! empty( $sp['name'] ) )   { $sp_bits[] = sanitize_text_field( $sp['name'] ); }
+                if ( ! empty( $sp['id'] ) )     { $sp_bits[] = '#' . sanitize_text_field( $sp['id'] ); }
+                if ( ! empty( $sp_bits ) ) {
+                    $note_lines[] = 'Point relais : ' . implode( ' — ', $sp_bits );
+                }
+                if ( ! empty( $sp['id'] ) )      { $order->update_meta_data( '_houla_service_point_id', sanitize_text_field( $sp['id'] ) ); }
+                if ( ! empty( $sp['carrier'] ) ) { $order->update_meta_data( '_houla_service_point_carrier', sanitize_text_field( $sp['carrier'] ) ); }
+                if ( ! empty( $sp['method'] ) )  { $order->update_meta_data( '_houla_shipping_method', sanitize_text_field( $sp['method'] ) ); }
+            }
             $note_lines[] = '';
             foreach ( $data['items'] as $item ) {
                 $item_name  = ! empty( $item['name'] ) ? sanitize_text_field( $item['name'] ) : 'Product #' . absint( $item['external_id'] );
