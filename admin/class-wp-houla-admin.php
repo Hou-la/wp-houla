@@ -220,7 +220,10 @@ class Wp_Houla_Admin {
         }
 
         $api    = new Wp_Houla_Api();
-        $result = $api->get( '/workspaces' );
+        // /workspaces is JWT-only on the API — force the OAuth Bearer (the persistent
+        // API key is workspace-scoped and would be rejected with 401, surfacing a false
+        // "Echec de l'authentification" while orders sync fine via the API key).
+        $result = $api->get( '/workspaces', array(), array( 'use_access_token' => true ) );
 
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( 'API error: ' . $result->get_error_message() );

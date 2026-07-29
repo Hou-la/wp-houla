@@ -90,16 +90,20 @@ class Wp_Houla_Api {
      *
      * @return array|false  Auth headers array, or false if not authenticated.
      */
-    private function resolve_auth_headers() {
-        // 1. Try API key first (persistent)
-        $api_key = $this->auth->get_api_key();
-        if ( $api_key ) {
-            return array(
-                'X-Api-Key' => $api_key,
-            );
+    private function resolve_auth_headers( $use_access_token = false ) {
+        // User-level endpoints (e.g. GET /workspaces) are JWT-only on the API and
+        // reject the workspace-scoped API key. For those, force the OAuth Bearer.
+        if ( ! $use_access_token ) {
+            // 1. Prefer the API key (persistent, survives token expiry)
+            $api_key = $this->auth->get_api_key();
+            if ( $api_key ) {
+                return array(
+                    'X-Api-Key' => $api_key,
+                );
+            }
         }
 
-        // 2. Fallback to OAuth Bearer token
+        // 2. OAuth Bearer token (required for JWT-only endpoints, or fallback)
         $token = $this->auth->get_access_token();
         if ( $token ) {
             return array(
@@ -129,7 +133,7 @@ class Wp_Houla_Api {
                 'X-Api-Key' => $overrides['api_key'],
             );
         } else {
-            $auth_headers = $this->resolve_auth_headers();
+            $auth_headers = $this->resolve_auth_headers( ! empty( $overrides['use_access_token'] ) );
         }
 
         if ( false === $auth_headers ) {
@@ -201,8 +205,12 @@ class Wp_Houla_Api {
 
             // Attempt OAuth token refresh
             if ( $this->auth->refresh_token() ) {
-                // Re-provision a fresh API key so future calls use it (not the JWT)
-                $this->auth->provision_api_key();
+                // Re-provision a fresh API key for workspace-scoped calls — but NOT
+                // for JWT-only calls (e.g. /workspaces), which must keep using the
+                // Bearer token on retry.
+                if ( empty( $overrides['use_access_token'] ) ) {
+                    $this->auth->provision_api_key();
+                }
                 return $this->request( $method, $endpoint, $body, $query, $attempt + 1, $overrides );
             }
 
