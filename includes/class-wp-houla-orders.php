@@ -598,7 +598,7 @@ class Wp_Houla_Orders {
         'open_cart'           => 'open-cart',
         'paid'                => 'processing',
         'processing'          => 'processing',
-        'shipped'             => 'completed',
+        'shipped'             => 'houla-shipping',
         'delivered'           => 'completed',
         'cancelled'           => 'cancelled',
         'abandoned'           => 'cancelled',
@@ -688,6 +688,26 @@ class Wp_Houla_Orders {
         // Clear the skip flag after save (the hook has already fired at this point)
         $order->delete_meta_data( '_houla_skip_sync' );
         $order->save_meta_data();
+
+        // « En cours de livraison (Hou.la) » est un statut CUSTOM → WooCommerce
+        // n'envoie AUCUN email client natif (contrairement à « Terminée »). Pour
+        // que l'acheteur soit quand même notifié avec le suivi, on ajoute une note
+        // CLIENT : add_order_note(..., true) déclenche l'email « Note ajoutée à
+        // votre commande » et y inclut le n° + lien de suivi. On ne le fait qu'au
+        // passage en livraison, et seulement si le suivi est présent (lien actif).
+        if ( 'houla-shipping' === $wc_status && ( ! empty( $data['tracking_number'] ) || ! empty( $data['tracking_url'] ) ) ) {
+            $customer_lines = array( __( 'Votre commande est en cours de livraison.', 'wp-houla' ) );
+            if ( ! empty( $data['carrier'] ) ) {
+                $customer_lines[] = sprintf( __( 'Transporteur : %s', 'wp-houla' ), sanitize_text_field( $data['carrier'] ) );
+            }
+            if ( ! empty( $data['tracking_number'] ) ) {
+                $customer_lines[] = sprintf( __( 'N° de suivi : %s', 'wp-houla' ), sanitize_text_field( $data['tracking_number'] ) );
+            }
+            if ( ! empty( $data['tracking_url'] ) ) {
+                $customer_lines[] = sprintf( __( 'Suivi : %s', 'wp-houla' ), esc_url_raw( $data['tracking_url'] ) );
+            }
+            $order->add_order_note( implode( "\n", $customer_lines ), true );
+        }
 
         $this->log( 'Order WC #' . $order_id . ' status changed to "' . $wc_status . '" (Hou.la ' . $data['houla_order_id'] . ').' );
 

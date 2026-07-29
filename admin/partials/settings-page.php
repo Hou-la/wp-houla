@@ -823,6 +823,7 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
                     'wc-on-hold'        => 'pending',
                     'wc-open-cart'      => 'open_cart',
                     'wc-processing'     => 'processing',
+                    'wc-houla-shipping' => 'shipped',
                     'wc-completed'      => 'delivered',
                     'wc-cancelled'      => 'cancelled',
                     'wc-failed'         => 'cancelled',

@@ -76,6 +76,23 @@ class Wp_Houla_Sync {
                 'wp-houla'
             ),
         ) );
+
+        // « En cours de livraison » : WooCommerce n'a pas de statut natif entre
+        // « En cours » et « Terminée ». Sans ça, un colis expédié tombait en
+        // « Terminée » (sémantiquement faux). Toujours présent tant que le plugin
+        // est actif → indépendant du transporteur.
+        register_post_status( 'wc-houla-shipping', array(
+            'label'                     => _x( 'En cours de livraison (Hou.la)', 'Order status', 'wp-houla' ),
+            'public'                    => true,
+            'exclude_from_search'       => false,
+            'show_in_admin_all_list'    => true,
+            'show_in_admin_status_list' => true,
+            'label_count'               => _n_noop(
+                'En cours de livraison (Hou.la) <span class="count">(%s)</span>',
+                'En cours de livraison (Hou.la) <span class="count">(%s)</span>',
+                'wp-houla'
+            ),
+        ) );
     }
 
     /**
@@ -94,11 +111,18 @@ class Wp_Houla_Sync {
                 $new_statuses['wc-open-cart']      = _x( 'Panier ouvert', 'Order status', 'wp-houla' );
                 $new_statuses['wc-abandoned-cart']  = _x( 'Panier abandonné', 'Order status', 'wp-houla' );
             }
+            // « En cours de livraison » se place entre « En cours » et « Terminée ».
+            if ( 'wc-processing' === $key ) {
+                $new_statuses['wc-houla-shipping'] = _x( 'En cours de livraison (Hou.la)', 'Order status', 'wp-houla' );
+            }
         }
-        // Fallback: add at the end if wc-pending wasn't found
+        // Fallback: add at the end if the anchor statuses weren't found
         if ( ! isset( $new_statuses['wc-open-cart'] ) ) {
             $new_statuses['wc-open-cart']      = _x( 'Panier ouvert', 'Order status', 'wp-houla' );
             $new_statuses['wc-abandoned-cart']  = _x( 'Panier abandonné', 'Order status', 'wp-houla' );
+        }
+        if ( ! isset( $new_statuses['wc-houla-shipping'] ) ) {
+            $new_statuses['wc-houla-shipping'] = _x( 'En cours de livraison (Hou.la)', 'Order status', 'wp-houla' );
         }
         return $new_statuses;
     }
@@ -980,6 +1004,7 @@ class Wp_Houla_Sync {
         'open-cart'      => 'open_cart',
         'abandoned-cart' => 'abandoned',
         'processing'     => 'processing',
+        'houla-shipping' => 'shipped',
         'completed'      => 'delivered',
         'cancelled'      => 'cancelled',
         'failed'         => 'cancelled',

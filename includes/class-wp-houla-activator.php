@@ -65,6 +65,7 @@ class Wp_Houla_Activator {
             'wc-on-hold'        => 'pending',
             'wc-open-cart'      => 'open_cart',
             'wc-processing'     => 'processing',
+            'wc-houla-shipping' => 'shipped',
             'wc-completed'      => 'delivered',
             'wc-cancelled'      => 'cancelled',
             'wc-failed'         => 'cancelled',

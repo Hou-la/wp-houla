@@ -84,10 +84,15 @@ class Wp_Houla_Order_Metabox {
             wp_send_json_error( __( 'Order not synced with Hou.la.', 'wp-houla' ) );
         }
 
-        // Call Hou.la API to generate label
+        // Call Hou.la API to generate label.
+        // Les endpoints /manager/* du studio sont JWT-only (JwtAuthGuard) → la clé
+        // API (X-Api-Key) est rejetée en 401. On force le Bearer + le workspace.
         $result = $this->api->post( '/manager/shipping/labels', array(
             'orderIds'    => array( $houla_order_id ),
             'labelFormat' => $format,
+        ), array(
+            'use_access_token' => true,
+            'workspace_id'     => $this->auth->get_workspace_id(),
         ) );
 
         if ( is_wp_error( $result ) ) {
@@ -231,6 +236,9 @@ class Wp_Houla_Order_Metabox {
 
         $result = $this->api->post( '/manager/print/orders/' . $houla_order_id . '/labels', array(
             'kinds' => array( 'shipping_label' ),
+        ), array(
+            'use_access_token' => true,
+            'workspace_id'     => $this->auth->get_workspace_id(),
         ) );
 
         if ( is_wp_error( $result ) ) {
@@ -279,7 +287,10 @@ class Wp_Houla_Order_Metabox {
             wp_send_json_error( __( 'Order not synced with Hou.la.', 'wp-houla' ) );
         }
 
-        $result = $this->api->delete( '/manager/shipping/labels/' . $houla_order_id );
+        $result = $this->api->delete( '/manager/shipping/labels/' . $houla_order_id, array(
+            'use_access_token' => true,
+            'workspace_id'     => $this->auth->get_workspace_id(),
+        ) );
 
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( $result->get_error_message() );
@@ -316,7 +327,10 @@ class Wp_Houla_Order_Metabox {
         }
 
         // Fetch order detail from Hou.la to check labelUrl
-        $detail = $this->api->get( '/manager/shop/orders/' . $houla_order_id );
+        $detail = $this->api->get( '/manager/shop/orders/' . $houla_order_id, array(), array(
+            'use_access_token' => true,
+            'workspace_id'     => $this->auth->get_workspace_id(),
+        ) );
 
         if ( is_wp_error( $detail ) ) {
             wp_send_json_error( $detail->get_error_message() );
@@ -348,13 +362,21 @@ class Wp_Houla_Order_Metabox {
      * Resolve auth headers for direct HTTP calls (same logic as Wp_Houla_Api).
      */
     private function get_auth_headers() {
+        // Le download PDF tape /manager/shop/orders/:id/shipping-label, garde
+        // JWT-only (JwtAuthGuard) → on privilégie le Bearer + le workspace ; la clé
+        // API (X-Api-Key) y renvoie 401.
+        $token = $this->auth->get_access_token();
+        if ( $token ) {
+            $headers = array( 'Authorization' => 'Bearer ' . $token );
+            $ws = $this->auth->get_workspace_id();
+            if ( $ws ) {
+                $headers['X-Workspace-Id'] = $ws;
+            }
+            return $headers;
+        }
         $api_key = $this->auth->get_api_key();
         if ( $api_key ) {
             return array( 'X-Api-Key' => $api_key );
-        }
-        $token = $this->auth->get_access_token();
-        if ( $token ) {
-            return array( 'Authorization' => 'Bearer ' . $token );
         }
         return false;
     }

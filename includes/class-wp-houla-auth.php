@@ -390,6 +390,15 @@ class Wp_Houla_Auth {
         return Wp_Houla_Options::decrypt( $encrypted );
     }
 
+    /**
+     * Get the connected workspace id (for X-Workspace-Id on JWT/Bearer calls).
+     *
+     * @return string The workspace id, or '' if none.
+     */
+    public function get_workspace_id() {
+        return (string) $this->options->get( 'workspace_id' );
+    }
+
     // =====================================================================
     // AJAX handlers
     // =====================================================================

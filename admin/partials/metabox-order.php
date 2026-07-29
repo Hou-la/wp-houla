@@ -191,6 +191,22 @@ if ( ! defined( 'ABSPATH' ) ) {
         color: #991b1b;
         border-left: 3px solid #ef4444;
     }
+    /* Centre les icônes dashicons dans les boutons : par défaut elles font 20px
+       avec line-height:1, donc décalées vs le libellé (~13px). Flex = robuste
+       quelle que soit la taille du bouton (.button vs .button-small). */
+    .wphoula-order-metabox .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+    .wphoula-order-metabox .button .dashicons {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+        line-height: 1;
+        margin: 0;
+    }
 </style>
 
 <script>
