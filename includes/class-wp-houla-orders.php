@@ -159,6 +159,10 @@ class Wp_Houla_Orders {
             // Attribute this order to Hou.la in the WooCommerce "Origin" column.
             $this->apply_order_origin( $order );
 
+            // Sendcloud service point (Mondial Relay / locker) metadata — set on BOTH
+            // create AND update so re-synced/merged orders also carry it.
+            $this->apply_service_point( $order, $customer );
+
             // ----------------------------------------------------------
             // Shipping
             // ----------------------------------------------------------
@@ -267,9 +271,7 @@ class Wp_Houla_Orders {
                 if ( ! empty( $sp_bits ) ) {
                     $note_lines[] = 'Point relais : ' . implode( ' — ', $sp_bits );
                 }
-                if ( ! empty( $sp['id'] ) )      { $order->update_meta_data( '_houla_service_point_id', sanitize_text_field( $sp['id'] ) ); }
-                if ( ! empty( $sp['carrier'] ) ) { $order->update_meta_data( '_houla_service_point_carrier', sanitize_text_field( $sp['carrier'] ) ); }
-                if ( ! empty( $sp['method'] ) )  { $order->update_meta_data( '_houla_shipping_method', sanitize_text_field( $sp['method'] ) ); }
+                // The relay meta is written by apply_service_point() (create AND update).
             }
             $note_lines[] = '';
             foreach ( $data['items'] as $item ) {
@@ -443,6 +445,10 @@ class Wp_Houla_Orders {
 
             // Attribute this order to Hou.la in the WooCommerce "Origin" column.
             $this->apply_order_origin( $order );
+
+            // Sendcloud service point (Mondial Relay / locker) metadata — set on BOTH
+            // create AND update so re-synced/merged orders also carry it.
+            $this->apply_service_point( $order, $customer );
 
             // ----------------------------------------------------------
             // Update metadata
@@ -779,6 +785,31 @@ class Wp_Houla_Orders {
         $order->update_meta_data( '_wc_order_attribution_utm_source', 'Hou.la' );
         $order->update_meta_data( '_wc_order_attribution_utm_medium', 'marketplace' );
         $order->update_meta_data( '_wc_order_attribution_referrer', 'https://hou.la' );
+    }
+
+    /**
+     * Persist the Sendcloud service point (Mondial Relay / locker) metadata on the
+     * order — the relay ID/carrier/method the buyer selected. Called for BOTH create
+     * and update so re-synced / open-cart-merged orders carry it too (the relay
+     * delivery address itself arrives via customer.address → WC shipping address).
+     *
+     * @param WC_Order $order
+     * @param array    $customer Webhook customer block.
+     */
+    private function apply_service_point( $order, $customer ) {
+        if ( empty( $customer['service_point'] ) || ! is_array( $customer['service_point'] ) ) {
+            return;
+        }
+        $sp = $customer['service_point'];
+        if ( ! empty( $sp['id'] ) ) {
+            $order->update_meta_data( '_houla_service_point_id', sanitize_text_field( $sp['id'] ) );
+        }
+        if ( ! empty( $sp['carrier'] ) ) {
+            $order->update_meta_data( '_houla_service_point_carrier', sanitize_text_field( $sp['carrier'] ) );
+        }
+        if ( ! empty( $sp['method'] ) ) {
+            $order->update_meta_data( '_houla_shipping_method', sanitize_text_field( $sp['method'] ) );
+        }
     }
 
     /**
