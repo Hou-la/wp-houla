@@ -30,7 +30,7 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
 
 <div class="wrap wphoula-settings">
     <h1 class="wphoula-page-title">
-        <img src="<?php echo esc_url( WPHOULA_URL . 'admin/images/houla-icon.svg' ); ?>" alt="Hou.la" class="wphoula-logo-full">
+        <img src="<?php echo esc_url( WPHOULA_URL . 'admin/images/houla-logo.png' ); ?>" alt="Hou.la" class="wphoula-logo-full">
     </h1>
 
     <?php if ( isset( $_GET['wphoula_connected'] ) && $_GET['wphoula_connected'] === '1' ) : ?>

@@ -172,6 +172,11 @@
             }
 
             var workspaces = response.data.workspaces;
+            // Clear any stale error from a previous/concurrent attempt now that we
+            // have a valid workspace list (defence-in-depth: the API no longer rotates
+            // the internal refresh token, so the concurrent-refresh race that produced
+            // that error is gone).
+            $status.hide().empty();
             if (workspaces.length <= 1) {
                 // Only one workspace — no need for a select
                 return;
