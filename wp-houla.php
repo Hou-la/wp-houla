@@ -7,7 +7,7 @@
  * @package           Wp_Houla
  *
  * @wordpress-plugin
- * Plugin Name:       Houla - Sync WooCommerce with Hou.la (Marketplace & Live Shopping)
+ * Plugin Name:       Hou.la – Marketplace & Live Shopping for WooCommerce
  * Plugin URI:        https://hou.la/
  * Description:       Sync your WooCommerce products and orders both ways with Hou.la - the social network, content-creation and live-shopping marketplace. Orders placed on Hou.la flow back into WooCommerce. Short links and QR codes included as a bonus.
  * Version:           1.5.9

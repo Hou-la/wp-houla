@@ -143,6 +143,10 @@ class Wp_Houla_Metabox {
     public function ajax_get_stats() {
         check_ajax_referer( 'wphoula_metabox', 'nonce' );
 
+        if ( ! current_user_can( 'edit_products' ) && ! current_user_can( 'edit_posts' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
+
         $product_id = absint( $_POST['product_id'] ?? 0 );
         $houla_id   = get_post_meta( $product_id, '_wphoula_product_id', true );
 

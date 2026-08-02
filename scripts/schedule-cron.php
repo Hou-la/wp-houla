@@ -1,4 +1,6 @@
 <?php
+// Hardening: never allow this diagnostic/dev script to run via a web request.
+if ( php_sapi_name() !== 'cli' && ! defined( 'WP_CLI' ) ) { exit; }
 /**
  * Diagnostic: attempt to schedule wphoula_cron_sync and report errors.
  * Usage: cd /var/www/vhosts/lucky-geek.com/httpdocs && php /tmp/schedule-cron.php

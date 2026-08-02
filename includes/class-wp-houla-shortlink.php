@@ -390,7 +390,7 @@ class Wp_Houla_Shortlink {
             esc_html( $text )
         );
 
-        return $atts['before'] . $output . $atts['after'];
+        return wp_kses_post( $atts['before'] ) . $output . wp_kses_post( $atts['after'] );
     }
 
     // =====================================================================

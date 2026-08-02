@@ -1,4 +1,6 @@
 <?php
+// Hardening: never allow this diagnostic/dev script to run via a web request.
+if ( php_sapi_name() !== 'cli' && ! defined( 'WP_CLI' ) ) { exit; }
 /**
  * Diagnostic: check API connection state for wp-houla-dev.
  */

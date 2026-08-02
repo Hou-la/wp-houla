@@ -1,4 +1,6 @@
 <?php
+// Hardening: never allow this diagnostic/dev script to run via a web request.
+if ( php_sapi_name() !== 'cli' && ! defined( 'WP_CLI' ) ) { exit; }
 /**
  * Bulk-create 25 WooCommerce sample products via direct SQL.
  * Run: wp eval-file seed-products.php

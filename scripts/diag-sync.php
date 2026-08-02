@@ -1,4 +1,6 @@
 <?php
+// Hardening: never allow this diagnostic/dev script to run via a web request.
+if ( php_sapi_name() !== 'cli' && ! defined( 'WP_CLI' ) ) { exit; }
 require_once '/var/www/vhosts/lucky-geek.com/httpdocs/wp-load.php';
 
 echo '=== SYNC STATUS ===' . PHP_EOL;

@@ -17,6 +17,6 @@ jobs:
         env:
           SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
           SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
-          SLUG: houla
+          SLUG: wp-houla
           BUILD_DIR: .
           ASSETS_DIR: .wordpress-org

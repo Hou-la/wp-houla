@@ -92,8 +92,8 @@ $qrcode    = get_post_meta( $product_id, '_wphoula_qrcode', true );
                 </button>
             </div>
             <?php
-                $qrcode_svg = get_post_meta( $post_id, '_wphoula_qrcode_svg', true );
-                $qrcode_png = get_post_meta( $post_id, '_wphoula_qrcode_png', true );
+                $qrcode_svg = get_post_meta( $product_id, '_wphoula_qrcode_svg', true );
+                $qrcode_png = get_post_meta( $product_id, '_wphoula_qrcode_png', true );
             ?>
             <?php if ( $qrcode ) : ?>
                 <div class="wphoula-qrcode-preview">

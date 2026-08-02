@@ -127,7 +127,6 @@ class Wp_Houla {
             $this->loader->add_action( 'wp_ajax_wphoula_bg_sync_process', $admin, 'ajax_bg_sync_process' );
             $this->loader->add_action( 'wp_ajax_wphoula_get_sync_status', $admin, 'ajax_get_sync_status' );
             $this->loader->add_action( 'wp_ajax_wphoula_cancel_sync', $admin, 'ajax_cancel_sync' );
-            $this->loader->add_action( 'wp_ajax_nopriv_wphoula_bg_sync_process', $admin, 'ajax_bg_sync_process' );
             $this->loader->add_action( 'wp_ajax_wphoula_get_synced_products', $admin, 'ajax_get_synced_products' );
             $this->loader->add_action( 'wp_ajax_wphoula_get_collections', $admin, 'ajax_get_collections' );
             $this->loader->add_action( 'wp_ajax_wphoula_auto_map_collections', $admin, 'ajax_auto_map_collections' );

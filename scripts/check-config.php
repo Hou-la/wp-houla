@@ -1,4 +1,6 @@
 <?php
+// Hardening: never allow this diagnostic/dev script to run via a web request.
+if ( php_sapi_name() !== 'cli' && ! defined( 'WP_CLI' ) ) { exit; }
 // Quick config check script — run via: docker exec wp-houla-wordpress-1 wp --allow-root eval-file /var/www/html/wp-content/plugins/wp-houla/scripts/check-config.php
 $opts = get_option('wphoula-options', array());
 echo "api_key: " . (empty($opts['api_key']) ? 'EMPTY' : 'SET (' . strlen($opts['api_key']) . ' chars)') . "\n";

@@ -1,0 +1,49 @@
+# Files & dirs excluded from the WordPress.org distribution (plugin ZIP / SVN trunk).
+# Used by 10up/action-wordpress-plugin-deploy (BUILD_DIR=.) and to build the
+# manual submission ZIP. Keep ONLY runtime plugin files in the package.
+
+# Version control / CI
+/.git
+/.github
+/.gitignore
+/.gitattributes
+/.distignore
+/.editorconfig
+
+# Dev tooling & dependencies
+/node_modules
+/vendor
+/tests
+/scripts
+/docs
+composer.json
+composer.lock
+package.json
+package-lock.json
+phpunit.xml
+phpunit.xml.dist
+phpcs.xml
+phpcs.xml.dist
+.phpcs.xml.dist
+
+# WordPress.org assets (banners/icons/screenshots) — deployed to /assets, NOT the plugin
+/.wordpress-org
+
+# GitHub-only docs (WordPress.org uses readme.txt)
+README.md
+
+# Tracked dev/build files — not part of the runtime plugin
+/master
+/assets
+/log
+/build.ps1
+/build-dev.ps1
+/docker-compose.dev.yml
+/docker-compose.test.yml
+/Dockerfile.test
+/patchwork.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log

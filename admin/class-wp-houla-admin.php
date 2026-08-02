@@ -456,6 +456,12 @@ class Wp_Houla_Admin {
             wp_send_json_error( 'Invalid background nonce' );
         }
 
+        // The loopback request forwards the initiating user's cookies, so require
+        // that user's capability in addition to the one-time transient token.
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Permission denied' );
+        }
+
         // Exclusive lock: only one sync process can run at a time
         $lock_file = sys_get_temp_dir() . '/wphoula_sync_' . md5( ABSPATH ) . '.lock';
         $lock_fp   = fopen( $lock_file, 'w' );
@@ -633,7 +639,7 @@ class Wp_Houla_Admin {
         // Custom API URL (only accepted in dev mode)
         $api_url = '';
         if ( isset( $_POST['api_url'] ) && function_exists( 'wphoula_is_dev_mode' ) && wphoula_is_dev_mode() ) {
-            $api_url = esc_url_raw( trim( $_POST['api_url'] ) );
+            $api_url = esc_url_raw( trim( wp_unslash( $_POST['api_url'] ) ) );
         }
 
         // Price adjustment
@@ -641,7 +647,7 @@ class Wp_Houla_Admin {
         $price_adj_value = 0;
         if ( isset( $_POST['price_adjustment_type'] ) ) {
             $allowed_types = array( 'none', 'percent_up', 'percent_down', 'fixed_up', 'fixed_down' );
-            $price_adj_type = sanitize_text_field( $_POST['price_adjustment_type'] );
+            $price_adj_type = sanitize_text_field( wp_unslash( $_POST['price_adjustment_type'] ) );
             if ( ! in_array( $price_adj_type, $allowed_types, true ) ) {
                 $price_adj_type = 'none';
             }
@@ -653,7 +659,7 @@ class Wp_Houla_Admin {
         // Category -> Collection mapping
         $cat_collection_map = array();
         if ( isset( $_POST['category_collection_map'] ) && is_array( $_POST['category_collection_map'] ) ) {
-            foreach ( $_POST['category_collection_map'] as $cat_id => $collection_id ) {
+            foreach ( wp_unslash( $_POST['category_collection_map'] ) as $cat_id => $collection_id ) {
                 $cat_id = absint( $cat_id );
                 $collection_id = sanitize_text_field( $collection_id );
                 if ( $cat_id > 0 && ! empty( $collection_id ) ) {
@@ -666,7 +672,7 @@ class Wp_Houla_Admin {
         $order_status_map = array();
         if ( isset( $_POST['order_status_map'] ) && is_array( $_POST['order_status_map'] ) ) {
             $valid_houla = array( 'pending', 'open_cart', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'abandoned', 'refunded', 'partially_refunded' );
-            foreach ( $_POST['order_status_map'] as $wc_slug => $houla_status ) {
+            foreach ( wp_unslash( $_POST['order_status_map'] ) as $wc_slug => $houla_status ) {
                 $wc_slug      = sanitize_text_field( $wc_slug );
                 $houla_status = sanitize_key( $houla_status );
                 if ( in_array( $houla_status, $valid_houla, true ) && ! empty( $wc_slug ) ) {
@@ -682,7 +688,7 @@ class Wp_Houla_Admin {
         $identifier_meta_map = array( 'gtin' => '', 'isbn' => '' );
         if ( isset( $_POST['identifier_meta_map'] ) && is_array( $_POST['identifier_meta_map'] ) ) {
             $valid_ids = array( 'gtin', 'isbn' );
-            foreach ( $_POST['identifier_meta_map'] as $id_key => $meta_key ) {
+            foreach ( wp_unslash( $_POST['identifier_meta_map'] ) as $id_key => $meta_key ) {
                 $id_key   = sanitize_key( $id_key );
                 $meta_key = sanitize_text_field( $meta_key );
                 if ( in_array( $id_key, $valid_ids, true ) ) {
@@ -726,7 +732,7 @@ class Wp_Houla_Admin {
             wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
         }
 
-        $raw_map = isset( $_POST['category_workspace_map'] ) ? $_POST['category_workspace_map'] : array();
+        $raw_map = isset( $_POST['category_workspace_map'] ) ? wp_unslash( $_POST['category_workspace_map'] ) : array();
         if ( ! is_array( $raw_map ) ) {
             $raw_map = array();
         }
@@ -1123,6 +1129,10 @@ class Wp_Houla_Admin {
     public function ajax_get_shop_status() {
         check_ajax_referer( 'wphoula_admin', 'nonce' );
 
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
+
         if ( ! $this->auth->is_connected() ) {
             wp_send_json_error( __( 'Not connected to Hou.la.', 'wp-houla' ) );
         }
@@ -1242,7 +1252,7 @@ class Wp_Houla_Admin {
             wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
         }
 
-        $filter = isset( $_POST['filter'] ) ? sanitize_text_field( $_POST['filter'] ) : 'all';
+        $filter = isset( $_POST['filter'] ) ? sanitize_text_field( wp_unslash( $_POST['filter'] ) ) : 'all';
         if ( ! in_array( $filter, array( 'all', 'failed' ), true ) ) {
             $filter = 'all';
         }
@@ -1258,6 +1268,10 @@ class Wp_Houla_Admin {
      */
     public function ajax_order_sync_counts() {
         check_ajax_referer( 'wphoula_admin', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
 
         try {
             $sync   = new Wp_Houla_Sync();
@@ -1279,7 +1293,7 @@ class Wp_Houla_Admin {
             wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
         }
 
-        $filter = isset( $_POST['filter'] ) ? sanitize_text_field( $_POST['filter'] ) : 'all';
+        $filter = isset( $_POST['filter'] ) ? sanitize_text_field( wp_unslash( $_POST['filter'] ) ) : 'all';
         if ( ! in_array( $filter, array( 'all', 'failed' ), true ) ) {
             $filter = 'all';
         }

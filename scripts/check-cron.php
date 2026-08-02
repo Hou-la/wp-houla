@@ -1,4 +1,6 @@
 <?php
+// Hardening: never allow this diagnostic/dev script to run via a web request.
+if ( php_sapi_name() !== 'cli' && ! defined( 'WP_CLI' ) ) { exit; }
 /**
  * Diagnostic: check if wphoula_cron_sync is scheduled.
  * Usage: php check-cron.php

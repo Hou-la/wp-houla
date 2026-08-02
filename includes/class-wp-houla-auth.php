@@ -400,24 +400,6 @@ class Wp_Houla_Auth {
     }
 
     // =====================================================================
-    // AJAX handlers
-    // =====================================================================
-
-    /**
-     * AJAX: Disconnect from Hou.la.
-     */
-    public function ajax_disconnect() {
-        check_ajax_referer( 'wphoula_disconnect', 'nonce' );
-
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            wp_send_json_error( array( 'message' => 'Unauthorized' ) );
-        }
-
-        $this->disconnect();
-        wp_send_json_success( array( 'status' => 'disconnected' ) );
-    }
-
-    // =====================================================================
     // Helpers
     // =====================================================================
 

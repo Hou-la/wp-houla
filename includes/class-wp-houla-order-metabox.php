@@ -72,7 +72,7 @@ class Wp_Houla_Order_Metabox {
         }
 
         $wc_order_id = absint( $_POST['order_id'] ?? 0 );
-        $format      = sanitize_text_field( $_POST['format'] ?? '10x15' );
+        $format      = sanitize_text_field( wp_unslash( $_POST['format'] ?? '10x15' ) );
         $order       = wc_get_order( $wc_order_id );
 
         if ( ! $order ) {
@@ -149,7 +149,7 @@ class Wp_Houla_Order_Metabox {
      */
     public function ajax_download_label() {
         // Use a separate nonce for the download URL
-        if ( ! wp_verify_nonce( $_GET['nonce'] ?? '', 'wphoula_download_label' ) ) {
+        if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ?? '' ) ), 'wphoula_download_label' ) ) {
             wp_die( __( 'Security check failed.', 'wp-houla' ) );
         }
 
@@ -189,12 +189,12 @@ class Wp_Houla_Order_Metabox {
         ) );
 
         if ( is_wp_error( $response ) ) {
-            wp_die( $response->get_error_message() );
+            wp_die( esc_html( $response->get_error_message() ) );
         }
 
         $status = wp_remote_retrieve_response_code( $response );
         if ( $status >= 400 ) {
-            wp_die( __( 'Failed to download label. Hou.la API returned status: ', 'wp-houla' ) . $status );
+            wp_die( esc_html( __( 'Failed to download label. Hou.la API returned status: ', 'wp-houla' ) . $status ) );
         }
 
         $pdf_body = wp_remote_retrieve_body( $response );

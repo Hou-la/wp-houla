@@ -1,9 +1,9 @@
-=== Houla - Sync WooCommerce with Hou.la (Marketplace & Live Shopping) ===
-Contributors: mikhaelgerbet
+=== Hou.la – Marketplace & Live Shopping for WooCommerce ===
+Contributors: houla
 Donate link: https://hou.la
 Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 6.8
 Requires PHP: 7.4
 Stable tag: 1.5.9
 License: GPLv2 or later
@@ -164,7 +164,7 @@ Yes. Short links, QR codes, click statistics, and the link-in-bio page work on a
 
 = Do I need a paid Hou.la account? =
 
-No. The free plan includes unlimited short links, QR codes, and bio pages. Commerce features are available on all plans. The difference between plans is the commission rate on sales: 8% on the free plan, 3% on Pro.
+No. Hou.la is free, with no plans or subscriptions. Short links, QR codes, bio pages and the commerce features are all included. The only cost is a single 5% commission on marketplace sales.
 
 = How is this different from Linktree or other link-in-bio tools? =
 
@@ -221,6 +221,20 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.5.9 =
+* Security & code hardening for the WordPress.org release: capability checks added to every AJAX handler, input unslashing/escaping on request data, and removal of an unauthenticated background-sync entry point
+* Order & buyer identity: WooCommerce orders created from Hou.la now carry the buyer's Hou.la workspace identity (display name, @handle, avatar) and are attributed to a clean "Hou.la" origin
+* Open-cart preservation: re-payments and shipping top-ups on live / open-cart orders no longer close the cart prematurely
+* Shipping: point-relais (pickup point) support via Sendcloud, plus a new "En cours de livraison (Hou.la)" order status with tracking email and a fixed shipping-label widget authentication flow
+* Robustness & branding fixes across the admin UI (logo, error handling)
+
+= 1.5.3 - 2026-07-20 =
+* Buyer identity on WooCommerce orders and "Hou.la" origin labelling
+* Early open-cart preservation and status-concordance improvements
+* Sendcloud point-relais shipping and the "En cours de livraison (Hou.la)" status with tracking email
+* Shipping-label widget authentication fix and general robustness/logo polish
+(rolls up the 1.5.3 through 1.5.8 maintenance releases)
 
 = 1.5.2 - 2026-07-03 =
 * Repositioned around the core: two-way WooCommerce <-> Hou.la product & order sync for the marketplace and live shopping (short links & QR codes are a bonus)

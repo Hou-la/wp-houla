@@ -225,6 +225,10 @@ class Wp_Houla_Post_Metabox {
     public function ajax_get_link_stats() {
         check_ajax_referer( 'wphoula_post_metabox', 'nonce' );
 
+        if ( ! current_user_can( 'edit_posts' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
+
         $post_id = absint( $_POST['post_id'] ?? 0 );
         $link_id = get_post_meta( $post_id, '_wphoula_link_id', true );
 
