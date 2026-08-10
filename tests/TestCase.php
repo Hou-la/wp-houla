@@ -43,6 +43,7 @@ abstract class TestCase extends PHPUnitTestCase {
                 return substr( str_repeat( 'abcdefghijklmnopqrstuvwxyz0123456789', 3 ), 0, $length );
             },
             'esc_html'          => function ( $text ) { return $text; },
+            'wp_kses_post'      => function ( $text ) { return $text; },
             'get_post'          => function ( $post = null ) { return null; },
             'wp_redirect'       => function ( $location, $status = 302 ) { return true; },
             'wp_die'            => function ( $message = '' ) { return; },
