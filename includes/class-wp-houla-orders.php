@@ -725,9 +725,17 @@ class Wp_Houla_Orders {
      * @return int|false WooCommerce order ID or false.
      */
     public function find_order_by_houla_id( $houla_order_id ) {
+        // Statuts réels uniquement : une commande à la CORBEILLE ne doit pas
+        // compter comme existante. Sinon chaque resynchronisation la retrouve,
+        // part sur update_order(), répond 200 avec un externalOrderId… et le
+        // marchand ne voit jamais rien réapparaître dans WooCommerce.
+        // wc_get_order_statuses() exclut trash / auto-draft / checkout-draft,
+        // et le défaut implicite de wc_get_orders() diffère entre HPOS et le
+        // stockage historique — d'où le passage explicite.
         $orders = wc_get_orders( array(
             'meta_key'   => '_houla_order_id',
             'meta_value' => sanitize_text_field( $houla_order_id ),
+            'status'     => array_keys( wc_get_order_statuses() ),
             'limit'      => 1,
             'return'     => 'ids',
         ) );
