@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.5.9
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,11 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.0 =
+* Fixed "Recover orders from Hou.la" failing with `cURL error 28: Operation timed out` — the recovery now runs as a background job on Hou.la and the button answers instantly instead of holding the connection open while every order is re-pushed one by one
+* The button reports how many orders were queued and refreshes the sync counters as they arrive
+* Orders deleted on Hou.la are no longer re-created in WooCommerce by a resync
 
 = 1.5.9 =
 * Security & code hardening for the WordPress.org release: capability checks added to every AJAX handler, input unslashing/escaping on request data, and removal of an unauthenticated background-sync entry point

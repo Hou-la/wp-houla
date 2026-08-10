@@ -1398,34 +1398,39 @@ class Wp_Houla_Sync {
      * Thanks to the upsert logic in create_order(), existing WC orders
      * will be updated (items replaced) and missing ones will be created.
      *
+     * Le dispatch est ASYNCHRONE côté Hou.la : chaque commande re-poussée est un
+     * webhook HTTP vers cette boutique (2-3 s l'unité), donc quelques dizaines de
+     * commandes dépassent largement les 30 s de `wp_remote_request` — c'est ce qui
+     * produisait « cURL error 28 » alors que la resynchronisation réussissait en
+     * fond. L'API répond maintenant immédiatement (202) et traite en file d'attente.
+     *
      * @param string $filter 'all' | 'failed' — which orders to re-push.
-     * @return array { succeeded: int, failed: int, total: int, message: string }
+     * @return array { queued: bool, total: int, message: string }
      */
     public function pull_orders_from_api( $filter = 'all' ) {
         if ( ! $this->auth->is_connected() ) {
-            return array( 'succeeded' => 0, 'failed' => 0, 'total' => 0, 'message' => 'Not connected' );
+            return array( 'queued' => false, 'total' => 0, 'message' => 'Not connected' );
         }
 
-        $endpoint = ( $filter === 'failed' ) ? '/ecommerce/orders/resync-failed' : '/ecommerce/orders/resync-all';
-        $result = $this->api->post( $endpoint );
+        $endpoint = '/ecommerce/orders/resync-async?all=' . ( $filter === 'failed' ? 'false' : 'true' );
+        $result   = $this->api->post( $endpoint );
 
         if ( is_wp_error( $result ) ) {
             $this->log( 'Pull orders from API failed: ' . $result->get_error_message() );
             return array(
-                'succeeded' => 0,
-                'failed'    => 0,
-                'total'     => 0,
-                'message'   => $result->get_error_message(),
+                'queued'  => false,
+                'total'   => 0,
+                'message' => $result->get_error_message(),
             );
         }
 
-        $this->log( 'Pull orders from API: ' . ( $result['succeeded'] ?? 0 ) . ' succeeded, ' . ( $result['failed'] ?? 0 ) . ' failed out of ' . ( $result['total'] ?? 0 ) . '.' );
+        $total = isset( $result['total'] ) ? (int) $result['total'] : 0;
+        $this->log( 'Pull orders from API queued: ' . $total . ' order(s) scheduled for re-push.' );
 
         return array(
-            'succeeded' => $result['succeeded'] ?? 0,
-            'failed'    => $result['failed'] ?? 0,
-            'total'     => $result['total'] ?? 0,
-            'message'   => 'OK',
+            'queued'  => true,
+            'total'   => $total,
+            'message' => 'OK',
         );
     }
 

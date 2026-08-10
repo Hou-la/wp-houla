@@ -89,6 +89,8 @@ class Wp_Houla_Admin {
                     'failedOrders'        => __( 'Failed', 'wp-houla' ),
                     'pendingOrders'       => __( 'Pending', 'wp-houla' ),
                     'pulling'             => __( 'Pulling orders from Hou.la...', 'wp-houla' ),
+                    'pullQueued'          => __( 'Récupération lancée : %d commande(s) en cours de renvoi par Hou.la. Elles apparaissent au fur et à mesure, comptez quelques minutes.', 'wp-houla' ),
+                    'pullQueuedEmpty'     => __( 'Aucune commande à récupérer : tout est déjà synchronisé.', 'wp-houla' ),
                     'xSynced'             => __( '%d synced', 'wp-houla' ),
                     'xFailed'             => __( '%d failed', 'wp-houla' ),
                     'xSkipped'            => __( '%d skipped', 'wp-houla' ),

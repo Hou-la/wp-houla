@@ -1371,12 +1371,22 @@
             console.log('[wp-houla] Pull orders response:', resp);
             $btn.prop('disabled', false).text(originalText);
             if (resp.success) {
-                var d = resp.data;
-                var msg = (i18n.xSynced || '%d synced').replace('%d', d.succeeded);
-                if (d.failed > 0) msg += ', ' + (i18n.xFailed || '%d failed').replace('%d', d.failed);
-                msg += ' ' + (i18n.xTotal || '(%d total)').replace('%d', d.total);
-                $status.html('<span style="color:' + (d.failed > 0 ? '#f0b849' : '#46b450') + ';">&#10003; ' + msg + '</span>');
-                loadOrderSyncCounts(); // Refresh counts
+                // Le renvoi tourne en file d'attente côté Hou.la : la réponse dit
+                // seulement combien de commandes sont programmées, pas le résultat.
+                var total = resp.data && resp.data.total ? parseInt(resp.data.total, 10) : 0;
+                var msg = total > 0
+                    ? (i18n.pullQueued || '%d order(s) queued for re-push.').replace('%d', total)
+                    : (i18n.pullQueuedEmpty || 'Nothing to pull: everything is already synced.');
+                $status.html('<span style="color:#46b450;">&#10003; ' + msg + '</span>');
+                // Les commandes arrivent par webhook : on rafraîchit les compteurs
+                // au fil de l'eau plutôt qu'une seule fois immédiatement (sinon on
+                // affiche toujours l'état d'avant la resynchronisation).
+                loadOrderSyncCounts();
+                if (total > 0) {
+                    [5000, 15000, 30000, 60000].forEach(function (delay) {
+                        window.setTimeout(loadOrderSyncCounts, delay);
+                    });
+                }
             } else {
                 $status.html('<span style="color:#dc3232;">&#10007; ' + (resp.data || (i18n.error || 'Error')) + '</span>');
             }
