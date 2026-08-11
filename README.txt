@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,10 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.1 =
+* Rate limiting no longer marks healthy orders as failed. "Resync all orders" sends one request per order; when Hou.la answered HTTP 429 the plugin recorded each one as a permanent failure, turning the "Failed" counter red for orders that were perfectly fine. The plugin now honours `Retry-After`, retries once, flags the order as pending rather than failed, stops the batch instead of hammering, and reports how many orders remain to retry
+* Orders sitting in the WooCommerce trash are no longer treated as existing, so a resync recreates a visible order instead of silently updating a trashed one
 
 = 1.6.0 =
 * Fixed "Recover orders from Hou.la" failing with `cURL error 28: Operation timed out` — the recovery now runs as a background job on Hou.la and the button answers instantly instead of holding the connection open while every order is re-pushed one by one
