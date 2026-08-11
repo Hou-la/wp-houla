@@ -168,9 +168,39 @@ class Wp_Houla_Webhook {
         }
 
         return new WP_REST_Response( array(
-            'success'         => true,
-            'externalOrderId' => isset( $result['order_id'] ) ? $result['order_id'] : null,
+            'success'          => true,
+            'externalOrderId'  => isset( $result['order_id'] ) ? $result['order_id'] : null,
+            // URL d'édition CALCULÉE PAR LA BOUTIQUE, jamais devinée par Hou.la :
+            // elle diffère entre le stockage HPOS et l'ancien stockage `post`,
+            // et seul le site sait lequel est actif. Hou.la la mémorise pour
+            // offrir à la vendeuse un lien direct depuis son détail de commande.
+            'externalOrderUrl' => $this->order_edit_url( $result ),
         ), 200 );
+    }
+
+    /**
+     * URL d'édition de la commande WooCommerce qui vient d'être créée / mise à jour.
+     *
+     * Renvoie null plutôt qu'une URL approximative : côté Hou.la, l'absence
+     * d'URL déclenche un repli sur une recherche par numéro, alors qu'un lien
+     * faux mènerait la vendeuse sur un 404.
+     *
+     * @param array $result Résultat du gestionnaire d'événement.
+     * @return string|null
+     */
+    private function order_edit_url( $result ) {
+        if ( ! isset( $result['order_id'] ) || ! $result['order_id'] ) {
+            return null;
+        }
+        if ( ! function_exists( 'wc_get_order' ) ) {
+            return null;
+        }
+        $order = wc_get_order( $result['order_id'] );
+        if ( ! $order || ! method_exists( $order, 'get_edit_order_url' ) ) {
+            return null;
+        }
+        $url = $order->get_edit_order_url();
+        return $url ? $url : null;
     }
 
     // =====================================================================
