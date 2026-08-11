@@ -769,6 +769,19 @@ class Wp_Houla_Orders {
      * order metabox) and fall the billing name back to the display name so the
      * order is never attributed to a blank "Invité" customer.
      *
+     * Le pseudo est préfixé au nom de FACTURATION — « (Choupot) haddaoui » —
+     * parce que c'est ce nom que WooCommerce affiche comme titre de commande :
+     * pendant un live, la vendeuse ne connaît sa cliente que par son pseudo
+     * (chat, cadeaux, dashboard), mais l'expédition a besoin de l'identité
+     * civile. Les deux informations sont donc portées séparément.
+     *
+     * ⚠️ JAMAIS sur l'adresse d'EXPÉDITION : elle alimente les étiquettes
+     * transporteur (GLS, Colissimo, Mondial Relay), et un point relais remet le
+     * colis contre pièce d'identité — un pseudo dessus et le colis repart en
+     * retour. Cette méthode ne touche que la facturation, et elle s'exécute
+     * APRÈS `set_address(..., 'shipping')` dans create_order comme dans
+     * update_order : l'expédition reste intacte.
+     *
      * @param WC_Order $order
      * @param array    $customer Webhook customer block.
      */
@@ -780,9 +793,21 @@ class Wp_Houla_Orders {
 
         if ( $display_name !== '' ) {
             $order->update_meta_data( '_houla_buyer_display_name', $display_name );
-            // No real name captured → show the workspace identity as the customer.
-            if ( $order->get_billing_first_name() === '' && $order->get_billing_last_name() === '' ) {
+
+            $first = $order->get_billing_first_name();
+            $last  = $order->get_billing_last_name();
+
+            if ( $first === '' && $last === '' ) {
+                // Aucune identité civile captée : le pseudo tient lieu de client,
+                // sans parenthèses (il n'y a rien à distinguer).
                 $order->set_billing_first_name( $display_name );
+            } elseif ( apply_filters( 'wphoula_prefix_billing_name_with_pseudo', true, $order, $customer ) ) {
+                // Idempotent : update_order() rejoue ce bloc à CHAQUE
+                // resynchronisation, sans quoi on empilerait
+                // « (Choupot) (Choupot) haddaoui ».
+                $prefix = '(' . $display_name . ')';
+                $first  = $this->strip_pseudo_prefix( $first );
+                $order->set_billing_first_name( trim( $prefix . ' ' . $first ) );
             }
         }
         if ( $handle !== '' ) {
@@ -794,6 +819,23 @@ class Wp_Houla_Orders {
         if ( $avatar !== '' ) {
             $order->update_meta_data( '_houla_buyer_avatar', $avatar );
         }
+    }
+
+    /**
+     * Retire un préfixe pseudo « (…) » déjà présent en tête du prénom de
+     * facturation, quel qu'en soit le contenu — le displayName d'un workspace
+     * peut changer entre deux synchronisations, donc on ne peut pas se contenter
+     * de comparer au pseudo courant.
+     *
+     * @param string $first_name
+     * @return string
+     */
+    private function strip_pseudo_prefix( $first_name ) {
+        // Le modificateur /u renvoie null sur une chaîne UTF-8 invalide : on
+        // garde alors le nom d'origine plutôt que de le vider.
+        $stripped = preg_replace( '/^\s*\([^)]*\)\s*/u', '', $first_name );
+
+        return trim( null === $stripped ? $first_name : $stripped );
     }
 
     /**

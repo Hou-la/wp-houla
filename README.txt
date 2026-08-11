@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,10 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.2 =
+* Order titles now read "(Workspace) First Last" — the buyer's Hou.la pseudo is prefixed to the billing name, so during a live you can tell at a glance who paid for what while still holding the customer's legal identity. The shipping address is deliberately left untouched: it feeds the carrier label, and a pickup point releases a parcel against ID. Disable with the `wphoula_prefix_billing_name_with_pseudo` filter
+* Re-syncing an order no longer stacks the prefix
 
 = 1.6.1 =
 * Rate limiting no longer marks healthy orders as failed. "Resync all orders" sends one request per order; when Hou.la answered HTTP 429 the plugin recorded each one as a permanent failure, turning the "Failed" counter red for orders that were perfectly fine. The plugin now honours `Retry-After`, retries once, flags the order as pending rather than failed, stops the batch instead of hammering, and reports how many orders remain to retry

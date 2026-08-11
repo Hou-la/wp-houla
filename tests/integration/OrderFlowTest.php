@@ -49,8 +49,13 @@ class MockWcOrder {
     public function set_total( $total ) {}
     public function save() {}
     public function add_order_note( $note, $is_customer_note = 0, $added_by_user = false ) {}
-    public function set_billing_first_name( $name ) {}
-    public function get_billing_first_name() { return ''; }
+    // Le nom de facturation est réellement porté par le mock : c'est lui que
+    // WooCommerce affiche comme titre de commande, et le préfixe pseudo ne doit
+    // surtout pas déborder sur l'adresse d'expédition (étiquette transporteur).
+    public function set_billing_first_name( $name ) { $this->billing['first_name'] = $name; }
+    public function get_billing_first_name() { return $this->billing['first_name'] ?? ''; }
+    public function get_billing_last_name() { return $this->billing['last_name'] ?? ''; }
+    public function get_address( $type = 'billing' ) { return $this->{$type}; }
     public function remove_item( $item_id ) { unset( $this->items[ $item_id ] ); }
     public function delete_meta_data( $key ) { unset( $this->meta[ $key ] ); }
     public function save_meta_data() {}
@@ -159,6 +164,87 @@ class OrderFlowTest extends TestCase {
         // Verify payment method.
         $this->assertEquals( 'houla_pay', $mockOrder->get_payment_method() );
         $this->assertEquals( 'processing', $mockOrder->get_status() );
+    }
+
+    /**
+     * Pendant un live, la vendeuse identifie sa cliente par son PSEUDO ; le
+     * transporteur, lui, exige l'identité civile. Les deux coexistent donc :
+     * pseudo entre parenthèses sur la FACTURATION (= titre de la commande),
+     * identité civile seule sur l'EXPÉDITION (= étiquette).
+     */
+    public function test_create_order_prefixes_billing_name_with_pseudo_but_not_shipping(): void {
+        $mockOrder = new MockWcOrder();
+
+        Functions\when( 'wc_create_order' )->justReturn( $mockOrder );
+        Functions\when( 'wc_get_product' )->justReturn( false );
+        Functions\when( 'wc_get_orders' )->justReturn( array() );
+
+        $orders = new \Wp_Houla_Orders();
+        $orders->create_order( array(
+            'houla_order_id' => 'houla-order-pseudo',
+            'items'          => array( array( 'external_id' => '1', 'quantity' => 1, 'price' => 10.0 ) ),
+            'customer'       => array(
+                'first_name'   => 'haddaoui',
+                'last_name'    => '',
+                'display_name' => 'Choupot',
+                'address'      => array( 'line1' => '77 allee Georges askinazi', 'city' => 'Boulogne' ),
+            ),
+        ) );
+
+        $this->assertEquals( '(Choupot) haddaoui', $mockOrder->get_billing_first_name() );
+
+        $shipping = $mockOrder->get_address( 'shipping' );
+        $this->assertEquals( 'haddaoui', $shipping['first_name'] );
+        $this->assertStringNotContainsString( 'Choupot', $shipping['first_name'] );
+    }
+
+    /**
+     * update_order() rejoue apply_buyer_identity() à chaque resynchronisation :
+     * sans dé-préfixage, on empilerait « (Choupot) (Choupot) haddaoui ».
+     */
+    public function test_resync_does_not_stack_the_pseudo_prefix(): void {
+        $mockOrder = new MockWcOrder();
+
+        Functions\when( 'wc_get_order' )->justReturn( $mockOrder );
+        Functions\when( 'wc_get_product' )->justReturn( false );
+        Functions\when( 'wc_get_orders' )->justReturn( array( 100 ) );
+
+        $orders  = new \Wp_Houla_Orders();
+        $payload = array(
+            'houla_order_id' => 'houla-order-pseudo',
+            'items'          => array( array( 'external_id' => '1', 'quantity' => 1, 'price' => 10.0 ) ),
+            'customer'       => array(
+                'first_name'   => 'haddaoui',
+                'display_name' => 'Choupot',
+            ),
+        );
+
+        $orders->update_order( $payload );
+        $orders->update_order( $payload );
+        $orders->update_order( $payload );
+
+        $this->assertEquals( '(Choupot) haddaoui', $mockOrder->get_billing_first_name() );
+    }
+
+    /**
+     * Achat en live sans aucune identité civile : le pseudo tient lieu de
+     * client, mais sans parenthèses — il n'y a rien à distinguer.
+     */
+    public function test_pseudo_alone_when_no_civil_name(): void {
+        $mockOrder = new MockWcOrder();
+
+        Functions\when( 'wc_create_order' )->justReturn( $mockOrder );
+        Functions\when( 'wc_get_product' )->justReturn( false );
+        Functions\when( 'wc_get_orders' )->justReturn( array() );
+
+        $orders = new \Wp_Houla_Orders();
+        $orders->create_order( array(
+            'houla_order_id' => 'houla-order-anon',
+            'items'          => array( array( 'external_id' => '1', 'quantity' => 1, 'price' => 10.0 ) ),
+            'customer'       => array( 'display_name' => 'Choupot' ),
+        ) );
+
+        $this->assertEquals( 'Choupot', $mockOrder->get_billing_first_name() );
     }
 
     public function test_create_order_rejects_missing_order_id(): void {

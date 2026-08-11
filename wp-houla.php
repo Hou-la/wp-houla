@@ -10,7 +10,7 @@
  * Plugin Name:       Hou.la – Marketplace & Live Shopping for WooCommerce
  * Plugin URI:        https://hou.la/
  * Description:       Sync your WooCommerce products and orders both ways with Hou.la - the social network, content-creation and live-shopping marketplace. Orders placed on Hou.la flow back into WooCommerce. Short links and QR codes included as a bonus.
- * Version:           1.6.1
+ * Version:           1.6.2
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Hou.la
@@ -33,7 +33,7 @@ if ( ! defined( 'WPINC' ) ) {
 // Constants
 // =========================================================================
 
-define( 'WPHOULA_VERSION', '1.6.1' );
+define( 'WPHOULA_VERSION', '1.6.2' );
 define( 'WPHOULA_DIR', WP_PLUGIN_DIR . '/' . basename( dirname( __FILE__ ) ) );
 define( 'WPHOULA_URL', plugins_url( '/', __FILE__ ) );
 define( 'WPHOULA_BASENAME', plugin_basename( __FILE__ ) );
