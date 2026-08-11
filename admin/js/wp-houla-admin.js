@@ -1414,7 +1414,10 @@
                 var msg = (i18n.xSynced || '%d synced').replace('%d', d.synced);
                 if (d.failed > 0) msg += ', ' + (i18n.xFailed || '%d failed').replace('%d', d.failed);
                 if (d.skipped > 0) msg += ', ' + (i18n.xSkipped || '%d skipped').replace('%d', d.skipped);
-                $status.html('<span style="color:' + (d.failed > 0 ? '#f0b849' : '#46b450') + ';">&#10003; ' + msg + '</span>');
+                // Lot interrompu par la limite de débit : ces commandes ne sont pas
+                // en échec, elles n'ont simplement pas encore été traitées.
+                if (d.rate_limited > 0) msg += ' — ' + (i18n.xRateLimited || '%d à réessayer (limite de débit)').replace('%d', d.rate_limited);
+                $status.html('<span style="color:' + (d.failed > 0 || d.rate_limited > 0 ? '#f0b849' : '#46b450') + ';">&#10003; ' + msg + '</span>');
                 loadOrderSyncCounts(); // Refresh counts
             } else {
                 $status.html('<span style="color:#dc3232;">&#10007; ' + (resp.data || (i18n.error || 'Error')) + '</span>');

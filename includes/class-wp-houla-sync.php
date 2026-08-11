@@ -1298,10 +1298,21 @@ class Wp_Houla_Sync {
         );
 
         if ( is_wp_error( $result ) ) {
-            $order->update_meta_data( '_houla_sync_status', 'failed' );
+            // Une limite de débit n'est pas un échec de synchronisation : la
+            // commande reste valide et repassera au prochain essai. La marquer
+            // « failed » peignait en rouge des dizaines de commandes saines et
+            // rendait le compteur « Failed » ininterprétable.
+            $rate_limited = ( 'wphoula_rate_limited' === $result->get_error_code() );
+
+            $order->update_meta_data( '_houla_sync_status', $rate_limited ? 'pending' : 'failed' );
             $order->update_meta_data( '_houla_sync_error', $result->get_error_message() );
             $order->save();
-            return array( 'success' => false, 'message' => $result->get_error_message() );
+
+            return array(
+                'success'      => false,
+                'message'      => $result->get_error_message(),
+                'rate_limited' => $rate_limited,
+            );
         }
 
         $order->update_meta_data( '_houla_sync_status', 'synced' );
@@ -1372,10 +1383,17 @@ class Wp_Houla_Sync {
         $failed  = 0;
         $skipped = 0;
 
+        $rate_limited = 0;
+
         foreach ( $order_ids as $oid ) {
             $res = $this->resync_order( $oid );
             if ( $res['success'] ) {
                 $synced++;
+            } elseif ( ! empty( $res['rate_limited'] ) ) {
+                // Inutile de marteler : le reste du lot serait refusé pareil.
+                // On s'arrête et on annonce ce qui n'a pas été traité.
+                $rate_limited = count( $order_ids ) - $synced - $skipped - $failed;
+                break;
             } elseif ( $res['message'] === 'No mapping for status "' . wc_get_order( $oid )->get_status() . '"' ) {
                 $skipped++;
             } else {
@@ -1384,10 +1402,11 @@ class Wp_Houla_Sync {
         }
 
         return array(
-            'synced'  => $synced,
-            'failed'  => $failed,
-            'skipped' => $skipped,
-            'total'   => count( $order_ids ),
+            'synced'       => $synced,
+            'failed'       => $failed,
+            'skipped'      => $skipped,
+            'rate_limited' => $rate_limited,
+            'total'        => count( $order_ids ),
         );
     }
 

@@ -94,6 +94,7 @@ class Wp_Houla_Admin {
                     'xSynced'             => __( '%d synced', 'wp-houla' ),
                     'xFailed'             => __( '%d failed', 'wp-houla' ),
                     'xSkipped'            => __( '%d skipped', 'wp-houla' ),
+                    'xRateLimited'        => __( '%d à réessayer (limite de débit Hou.la)', 'wp-houla' ),
                     'xTotal'              => __( '(%d total)', 'wp-houla' ),
                     'errorPrefix'         => __( 'Error:', 'wp-houla' ),
                     'loadingWorkspaces'   => __( 'Chargement des espaces…', 'wp-houla' ),

@@ -220,6 +220,28 @@ class Wp_Houla_Api {
             return new WP_Error( 'wphoula_unauthorized', __( 'Echec de l\'authentification. Veuillez vous reconnecter.', 'wp-houla' ) );
         }
 
+        // 429 — limite de débit. Ce n'est PAS une erreur de synchronisation :
+        // la commande est parfaitement valide, l'API demande juste d'attendre.
+        // On respecte Retry-After (plafonné, on est dans une requête admin) et
+        // on retente une fois avant d'abandonner, pour qu'une resynchronisation
+        // en masse ne marque pas des dizaines de commandes « failed » à tort.
+        if ( 429 === $status_code ) {
+            if ( $attempt < $this->max_retries ) {
+                $retry_after = (int) wp_remote_retrieve_header( $response, 'retry-after' );
+                $wait        = max( 1, min( $retry_after ?: 1, 5 ) );
+                $this->log( $method . ' ' . $endpoint . ' rate limited, retrying in ' . $wait . 's' );
+                sleep( $wait );
+                return $this->request( $method, $endpoint, $body, $query, $attempt + 1, $overrides );
+            }
+
+            $this->log( $method . ' ' . $endpoint . ' rate limited (giving up)' );
+            return new WP_Error(
+                'wphoula_rate_limited',
+                __( 'Limite de débit Hou.la atteinte. Réessayez dans une minute.', 'wp-houla' ),
+                array( 'status' => 429 )
+            );
+        }
+
         // Handle errors
         if ( $status_code >= 400 ) {
             $msg = isset( $body_json['message'] ) ? $body_json['message'] : 'HTTP ' . $status_code;
