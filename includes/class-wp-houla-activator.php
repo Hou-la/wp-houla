@@ -66,6 +66,7 @@ class Wp_Houla_Activator {
             'wc-open-cart'      => 'open_cart',
             'wc-processing'     => 'processing',
             'wc-houla-shipping' => 'shipped',
+            'wc-houla-returned' => 'returned',
             'wc-completed'      => 'delivered',
             'wc-cancelled'      => 'cancelled',
             'wc-failed'         => 'cancelled',

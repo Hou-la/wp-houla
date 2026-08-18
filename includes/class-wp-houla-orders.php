@@ -599,6 +599,7 @@ class Wp_Houla_Orders {
         'paid'                => 'processing',
         'processing'          => 'processing',
         'shipped'             => 'houla-shipping',
+        'returned'            => 'houla-returned',
         'delivered'           => 'completed',
         'cancelled'           => 'cancelled',
         'abandoned'           => 'cancelled',

@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.2
+Stable tag: 1.6.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,12 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.3 =
+* NOUVEAU STATUT DE COMMANDE « Retour expediteur (Hou.la) ». Un colis refuse ou non retire repart chez le vendeur, et le transporteur emet alors un scan de LIVRAISON sur cette remise : la commande basculait donc en « livree » et l'acheteuse etait prevenue qu'elle avait recu un colis qu'elle n'a jamais eu. MISE A JOUR NECESSAIRE : Hou.la remonte deja ce statut, et une boutique qui ne le connait pas retombe sur « En attente de paiement » pour une commande pourtant payee.
+* Un statut d'expedition n'est plus remonte vers Hou.la sans transporteur ni numero de suivi. Une commande passee en « En cours de livraison » dans WooCommerce sans envoi reel apparaissait « expediee » cote acheteuse et sortait de la file « a expedier » de la vendeuse.
+* Meme regle appliquee a la resynchronisation manuelle d'une commande.
+* Le plugin detecte desormais les nouvelles versions et propose la mise a jour directement depuis l'ecran Extensions de WordPress.
 
 = 1.6.2 =
 * Order titles now read "(Workspace) First Last" — the buyer's Hou.la pseudo is prefixed to the billing name, so during a live you can tell at a glance who paid for what while still holding the customer's legal identity. The shipping address is deliberately left untouched: it feeds the carrier label, and a pickup point releases a parcel against ID. Disable with the `wphoula_prefix_billing_name_with_pseudo` filter

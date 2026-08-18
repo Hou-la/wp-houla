@@ -93,6 +93,24 @@ class Wp_Houla_Sync {
                 'wp-houla'
             ),
         ) );
+
+        // « Retourne a l'expediteur » : un colis refuse ou non retire repart
+        // chez le vendeur. WooCommerce n'a rien pour ca — « Terminee » serait
+        // faux (la cliente n'a rien recu) et « Annulee » aussi (l'argent n'est
+        // pas rembourse). Sans statut dedie, le retour restait invisible dans
+        // WooCommerce alors que Hou.la, lui, le connait.
+        register_post_status( 'wc-houla-returned', array(
+            'label'                     => _x( 'Retour expediteur (Hou.la)', 'Order status', 'wp-houla' ),
+            'public'                    => true,
+            'exclude_from_search'       => false,
+            'show_in_admin_all_list'    => true,
+            'show_in_admin_status_list' => true,
+            'label_count'               => _n_noop(
+                'Retour expediteur (Hou.la) <span class="count">(%s)</span>',
+                'Retour expediteur (Hou.la) <span class="count">(%s)</span>',
+                'wp-houla'
+            ),
+        ) );
     }
 
     /**
@@ -114,6 +132,7 @@ class Wp_Houla_Sync {
             // « En cours de livraison » se place entre « En cours » et « Terminée ».
             if ( 'wc-processing' === $key ) {
                 $new_statuses['wc-houla-shipping'] = _x( 'En cours de livraison (Hou.la)', 'Order status', 'wp-houla' );
+                $new_statuses['wc-houla-returned'] = _x( 'Retour expediteur (Hou.la)', 'Order status', 'wp-houla' );
             }
         }
         // Fallback: add at the end if the anchor statuses weren't found
@@ -123,6 +142,9 @@ class Wp_Houla_Sync {
         }
         if ( ! isset( $new_statuses['wc-houla-shipping'] ) ) {
             $new_statuses['wc-houla-shipping'] = _x( 'En cours de livraison (Hou.la)', 'Order status', 'wp-houla' );
+        }
+        if ( ! isset( $new_statuses['wc-houla-returned'] ) ) {
+            $new_statuses['wc-houla-returned'] = _x( 'Retour expediteur (Hou.la)', 'Order status', 'wp-houla' );
         }
         return $new_statuses;
     }
@@ -1005,6 +1027,7 @@ class Wp_Houla_Sync {
         'abandoned-cart' => 'abandoned',
         'processing'     => 'processing',
         'houla-shipping' => 'shipped',
+        'houla-returned' => 'returned',
         'completed'      => 'delivered',
         'cancelled'      => 'cancelled',
         'failed'         => 'cancelled',
@@ -1220,6 +1243,9 @@ class Wp_Houla_Sync {
             }
         }
 
+        $is_terminal  = in_array( $houla_status, array( 'cancelled', 'refunded' ), true );
+        $has_tracking = ! empty( $payload['tracking_number'] ) || ! empty( $payload['carrier'] ) || ! empty( $payload['tracking_url'] );
+
         // Do NOT push a spurious close of a still-open cart back to Hou.la. Store
         // automations (virtual-product auto-complete, or shipping plugins moving paid
         // orders to 'processing') flip wc-open-cart → completed/processing with no real
@@ -1227,12 +1253,34 @@ class Wp_Houla_Sync {
         // them to re-pay shipping on their next purchase. A genuine shipment (tracking
         // present) or a terminal cancel/refund is still forwarded normally.
         if ( in_array( $old_status, array( 'open-cart', 'wc-open-cart' ), true ) ) {
-            $is_terminal  = in_array( $houla_status, array( 'cancelled', 'refunded' ), true );
-            $has_tracking = ! empty( $payload['tracking_number'] );
             if ( ! $is_terminal && ! $has_tracking ) {
                 $this->log( 'Order #' . $order_id . ': suppressing spurious open-cart close (' . $old_status . ' → ' . $new_status . ', no tracking).' );
                 return;
             }
+        }
+
+        // ⚠️ UNE EXPÉDITION SE PROUVE, QUEL QUE SOIT L'ANCIEN STATUT.
+        //
+        // La garde ci-dessus ne couvrait que les paniers ouverts. Une commande
+        // déjà passée en 'processing' pouvait donc être poussée en « expédiée »
+        // vers Hou.la sans le moindre transporteur ni suivi : l'acheteuse lisait
+        // « expédiée » alors que rien n'était parti, et la commande sortait de la
+        // file « à expédier » de la vendeuse.
+        //
+        // Constaté en prod sur la commande Hou.la 2VQE2Z (WooCommerce #42729) :
+        // panier clôturé en 'processing' le 16/08, poussée en « expédiée » le
+        // 17/08 sans étiquette.
+        //
+        // Deux façons légitimes d'expédier restent possibles : générer
+        // l'étiquette depuis Hou.la (qui redescend le statut ici), ou expédier
+        // avec son propre transporteur en saisissant le suivi dans WooCommerce.
+        // Ce qui est refusé, c'est d'ANNONCER un envoi sans aucune trace.
+        //
+        // Le serveur applique la même règle de son côté : ceci évite surtout un
+        // aller-retour réseau inutile et garde le journal du plugin lisible.
+        if ( in_array( $houla_status, array( 'shipped', 'delivered' ), true ) && ! $has_tracking ) {
+            $this->log( 'Order #' . $order_id . ' : statut ' . $new_status . ' NON remonté vers Hou.la — aucun suivi ni transporteur (une expédition doit être prouvée).' );
+            return;
         }
 
         $result = $this->api->patch(
@@ -1290,6 +1338,19 @@ class Wp_Houla_Sync {
                     $payload['tracking_url'] = $tracking['tracking_url'];
                 }
             }
+        }
+
+        // Même règle que le hook de changement de statut : une expédition se
+        // prouve. Sans ce garde, un « Resync » manuel — ou une resynchronisation
+        // en masse — rejouait en bloc des « expédiée » sans le moindre suivi,
+        // exactement ce que le hook refuse désormais.
+        $has_tracking = ! empty( $payload['tracking_number'] ) || ! empty( $payload['carrier'] ) || ! empty( $payload['tracking_url'] );
+        if ( in_array( $houla_status, array( 'shipped', 'delivered' ), true ) && ! $has_tracking ) {
+            $this->log( 'Order #' . $order_id . ': resync du statut "' . $wc_status . '" ignorée — aucun suivi ni transporteur.' );
+            return array(
+                'success' => false,
+                'message' => "Statut d'expédition non resynchronisé : aucun numéro de suivi ni transporteur sur cette commande. Générez l'étiquette depuis Hou.la, ou saisissez le suivi ici.",
+            );
         }
 
         $result = $this->api->patch(

@@ -60,6 +60,7 @@ class Wp_Houla {
         require_once $base . 'class-wp-houla-post-metabox.php';
         require_once $base . 'class-wp-houla-activator.php';
         require_once $base . 'class-wp-houla-deactivator.php';
+        require_once $base . 'class-wp-houla-updater.php';
 
         require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-wp-houla-admin.php';
 
@@ -80,6 +81,12 @@ class Wp_Houla {
     // =====================================================================
 
     private function define_admin_hooks() {
+        // Mises à jour depuis les releases GitHub : sans ça, WordPress ignore
+        // qu'une version existe et une marchande reste bloquée sur la sienne,
+        // donc aucun correctif publié ici ne l'atteint jamais.
+        $updater = new WP_Houla_Updater( WPHOULA_BASENAME, WPHOULA_VERSION );
+        $updater->register();
+
         $admin = new Wp_Houla_Admin();
 
         // Styles & scripts
