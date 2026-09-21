@@ -599,6 +599,10 @@ class Wp_Houla_Orders {
         'paid'                => 'processing',
         'processing'          => 'processing',
         'shipped'             => 'houla-shipping',
+        // Les deux phases du retour cote Hou.la tombent sur le meme statut WC :
+        // le plugin n'en expose qu'un. La nuance « en cours de retour » vit cote
+        // Hou.la, et dans les deux cas la cliente n'a pas recu son colis.
+        'return_in_transit'   => 'houla-returned',
         'returned'            => 'houla-returned',
         'delivered'           => 'completed',
         'cancelled'           => 'cancelled',
