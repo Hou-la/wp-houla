@@ -48,7 +48,13 @@ class MockWcOrder {
     public function calculate_totals() {}
     public function set_total( $total ) {}
     public function save() {}
-    public function add_order_note( $note, $is_customer_note = 0, $added_by_user = false ) {}
+    /** @var string[] Notes CLIENT, c'est-à-dire les e-mails envoyés à l'acheteuse. */
+    public $customer_notes = array();
+    public function add_order_note( $note, $is_customer_note = 0, $added_by_user = false ) {
+        if ( $is_customer_note ) {
+            $this->customer_notes[] = $note;
+        }
+    }
     // Le nom de facturation est réellement porté par le mock : c'est lui que
     // WooCommerce affiche comme titre de commande, et le préfixe pseudo ne doit
     // surtout pas déborder sur l'adresse d'expédition (étiquette transporteur).
@@ -370,5 +376,64 @@ class OrderFlowTest extends TestCase {
         $this->assertIsArray( $result );
         $this->assertEquals( 100, $result['order_id'] );
         $this->assertEquals( 'refunded', $mockOrder->get_status() );
+    }
+
+    // =====================================================================
+    // E-mail « en cours de livraison » : une fois par envoi
+    // =====================================================================
+
+    private function shippedPayload( $tracking = 'XM022896292TS' ): array {
+        return array(
+            'houla_order_id'  => '47061371-a594-493a-951c-07654057da26',
+            'wc_status'       => 'houla-shipping',
+            'carrier'         => 'chronopost',
+            'tracking_number' => $tracking,
+            'tracking_url'    => 'https://tracking.example/' . $tracking,
+        );
+    }
+
+    private function processingOrder(): MockWcOrder {
+        $mockOrder = new MockWcOrder();
+        $mockOrder->set_status( 'processing' );
+        Functions\when( 'wc_get_orders' )->justReturn( array( 100 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $mockOrder );
+        Functions\when( 'esc_url_raw' )->returnArg( 1 );
+        return $mockOrder;
+    }
+
+    public function test_shipping_email_is_sent_when_the_order_enters_delivery(): void {
+        $mockOrder = $this->processingOrder();
+
+        ( new \Wp_Houla_Orders() )->update_order_status( $this->shippedPayload() );
+
+        $this->assertEquals( 'houla-shipping', $mockOrder->get_status() );
+        $this->assertCount( 1, $mockOrder->customer_notes );
+        $this->assertStringContainsString( 'XM022896292TS', $mockOrder->customer_notes[0] );
+    }
+
+    /**
+     * Cas réel : WC #42762, trois e-mails identiques le 21/08 (étiquette puis
+     * transition canonique, puis un troisième envoi du même colis).
+     */
+    public function test_repeated_shipped_messages_for_the_same_parcel_send_one_email(): void {
+        $mockOrder = $this->processingOrder();
+        $orders    = new \Wp_Houla_Orders();
+
+        $orders->update_order_status( $this->shippedPayload() );
+        $orders->update_order_status( $this->shippedPayload() );
+        $orders->update_order_status( $this->shippedPayload() );
+
+        $this->assertCount( 1, $mockOrder->customer_notes );
+    }
+
+    public function test_a_new_tracking_number_sends_a_new_email(): void {
+        $mockOrder = $this->processingOrder();
+        $orders    = new \Wp_Houla_Orders();
+
+        $orders->update_order_status( $this->shippedPayload( 'FIRST123' ) );
+        $orders->update_order_status( $this->shippedPayload( 'SECOND456' ) );
+
+        $this->assertCount( 2, $mockOrder->customer_notes );
+        $this->assertStringContainsString( 'SECOND456', $mockOrder->customer_notes[1] );
     }
 }

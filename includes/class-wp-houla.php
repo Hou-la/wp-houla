@@ -53,6 +53,7 @@ class Wp_Houla {
         require_once $base . 'class-wp-houla-api.php';
         require_once $base . 'class-wp-houla-sync.php';
         require_once $base . 'class-wp-houla-orders.php';
+        require_once $base . 'class-wp-houla-new-order-push.php';
         require_once $base . 'class-wp-houla-webhook.php';
         require_once $base . 'class-wp-houla-metabox.php';
         require_once $base . 'class-wp-houla-order-metabox.php';
@@ -238,6 +239,12 @@ class Wp_Houla {
 
         // Order status changes (WC → Hou.la)
         $this->loader->add_action( 'woocommerce_order_status_changed', $sync, 'on_order_status_changed', 10, 4 );
+
+        // Pas de fausse « nouvelle commande » dans l'app WooCommerce à la
+        // livraison d'une vieille commande. Priorité 5 : avant le déclencheur
+        // de WooCommerce (10).
+        $new_order_push = new Wp_Houla_New_Order_Push();
+        $this->loader->add_action( 'woocommerce_order_status_changed', $new_order_push, 'on_order_status_changed', 5, 4 );
     }
 
     // =====================================================================

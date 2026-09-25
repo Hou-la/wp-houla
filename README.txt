@@ -222,6 +222,10 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 
 == Changelog ==
 
+= 1.6.4 =
+* FIN DES FAUSSES « NOUVELLES COMMANDES » DANS L'APP WOOCOMMERCE. Depuis WooCommerce 10.7, la boutique annonce une nouvelle commande des qu'une commande passe d'un statut qu'elle ne connait pas a « Terminee ». Le passage « En cours de livraison (Hou.la) » vers « Terminee », a la livraison, faisait donc sonner le telephone de la vendeuse pour une commande vieille de plusieurs semaines. Une commande qui entre en livraison, ou qui en sort, est desormais consideree comme deja annoncee. La cloture d'un panier ouvert continue de sonner.
+* L'e-mail « Votre commande est en cours de livraison » ne part plus qu'une fois par colis. Chaque nouvel envoi du meme statut par Hou.la en declenchait un de plus : jusqu'a six e-mails identiques pour une seule commande. Un nouveau numero de suivi (nouvelle etiquette) declenche toujours un nouvel e-mail.
+
 = 1.6.3 =
 * NOUVEAU STATUT DE COMMANDE « Retour expediteur (Hou.la) ». Un colis refuse ou non retire repart chez le vendeur, et le transporteur emet alors un scan de LIVRAISON sur cette remise : la commande basculait donc en « livree » et l'acheteuse etait prevenue qu'elle avait recu un colis qu'elle n'a jamais eu. MISE A JOUR NECESSAIRE : Hou.la remonte deja ce statut, et une boutique qui ne le connait pas retombe sur « En attente de paiement » pour une commande pourtant payee.
 * Un statut d'expedition n'est plus remonte vers Hou.la sans transporteur ni numero de suivi. Une commande passee en « En cours de livraison » dans WooCommerce sans envoi reel apparaissait « expediee » cote acheteuse et sortait de la file « a expedier » de la vendeuse.

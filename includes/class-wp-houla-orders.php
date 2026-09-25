@@ -661,6 +661,11 @@ class Wp_Houla_Orders {
         $order     = wc_get_order( $order_id );
         $wc_status = sanitize_text_field( $data['wc_status'] );
 
+        // Lus AVANT d'être écrasés plus bas : ils disent si l'acheteuse a déjà
+        // été prévenue de CET envoi (cf. l'e-mail « en cours de livraison »).
+        $previous_status   = $order->get_status();
+        $previous_tracking = (string) $order->get_meta( '_houla_tracking_number' );
+
         // Set a flag to prevent infinite loop (this status change came from Hou.la,
         // so the woocommerce_order_status_changed hook should NOT send it back)
         $order->update_meta_data( '_houla_skip_sync', '1' );
@@ -700,7 +705,16 @@ class Wp_Houla_Orders {
         // CLIENT : add_order_note(..., true) déclenche l'email « Note ajoutée à
         // votre commande » et y inclut le n° + lien de suivi. On ne le fait qu'au
         // passage en livraison, et seulement si le suivi est présent (lien actif).
-        if ( 'houla-shipping' === $wc_status && ( ! empty( $data['tracking_number'] ) || ! empty( $data['tracking_url'] ) ) ) {
+        //
+        // UNE FOIS PAR ENVOI. Hou.la peut redire « expédiée » pour le même colis
+        // (étiquette + transition canonique, webhooks transporteur en double) :
+        // chaque message ajoutait une note client, donc un e-mail. Constaté sur
+        // giamory.com le 2026-09-25 : 59 commandes sur 70 avaient valu de 2 à 6
+        // e-mails identiques à l'acheteuse. On ne prévient donc que si la commande
+        // ENTRE en livraison, ou si le numéro de suivi a changé (nouvelle étiquette).
+        $new_tracking     = ! empty( $data['tracking_number'] ) ? sanitize_text_field( $data['tracking_number'] ) : '';
+        $already_notified = 'houla-shipping' === $previous_status && $new_tracking === $previous_tracking;
+        if ( 'houla-shipping' === $wc_status && ! $already_notified && ( ! empty( $data['tracking_number'] ) || ! empty( $data['tracking_url'] ) ) ) {
             $customer_lines = array( __( 'Votre commande est en cours de livraison.', 'wp-houla' ) );
             if ( ! empty( $data['carrier'] ) ) {
                 $customer_lines[] = sprintf( __( 'Transporteur : %s', 'wp-houla' ), sanitize_text_field( $data['carrier'] ) );
