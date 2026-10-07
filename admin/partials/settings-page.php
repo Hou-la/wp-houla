@@ -618,6 +618,7 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
                                 <p class="description"><?php esc_html_e( 'No WooCommerce categories found.', 'wp-houla' ); ?></p>
                             <?php endif; ?>
                             <p class="description"><?php esc_html_e( 'Select which categories to sync. Leave all unchecked to sync all products.', 'wp-houla' ); ?></p>
+                            <p class="description"><?php esc_html_e( 'Products already on Hou.la stay up to date, even if they leave these categories.', 'wp-houla' ); ?></p>
                         </fieldset>
                     </td>
                 </tr>

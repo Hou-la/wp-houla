@@ -772,7 +772,8 @@ class Wp_Houla_Sync {
      * Called via WP-Cron or admin AJAX.
      *
      * Respects the sync_categories option: when set, only syncs
-     * products belonging to the specified WooCommerce categories.
+     * products belonging to the specified WooCommerce categories, plus
+     * products already on Hou.la (see build_batch_query_args).
      *
      * @return array Summary (synced, skipped, errors).
      */

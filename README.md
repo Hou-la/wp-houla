@@ -158,7 +158,7 @@ In the **Sync** tab:
 
 - **Auto-sync** (enabled by default) - WooCommerce products are pushed to Hou.la on every change.
 - **Sync on publish** (enabled by default) - newly published products are synced immediately.
-- **Category filter** - select which WooCommerce categories to sync. Leave all unchecked to sync all products.
+- **Category filter** - select which WooCommerce categories enter Hou.la (child categories included). Leave all unchecked to sync all products. A product already on Hou.la keeps syncing even if it leaves these categories.
 - **Batch sync** - push the entire catalog in one click (useful after initial installation or import).
 
 ### 3. Orders
@@ -299,7 +299,7 @@ Three modes:
 2. **Manual** - "Sync" and "Remove" buttons in the product metabox.
 3. **Batch** - full catalog sync from settings (products processed in pages of 50).
 
-**Category filtering:** optionally limit sync to specific WooCommerce product categories via the Sync tab. Products outside the selected categories are skipped during both automatic hooks and batch sync.
+**Category filtering:** optionally limit which WooCommerce products ENTER Hou.la via the Sync tab (a product matches when one of its categories, or a parent of it, is selected). Products outside the selection are not created on Hou.la. A product already on Hou.la (`_wphoula_product_id`) is always kept up to date, by hooks and batch sync alike, even after it leaves the selection: otherwise it would stay on sale with frozen data (since 2026-10-07, case giamory.com #43452). The product metabox "Re-sync" button ignores the filter and the auto-sync switch, and reports the real API error.
 
 **Synced data:**
 

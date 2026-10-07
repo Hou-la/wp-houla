@@ -623,6 +623,9 @@ msgstr "Nessuna categoria WooCommerce trovata."
 msgid "Select which categories to sync. Leave all unchecked to sync all products."
 msgstr "Seleziona le categorie da sincronizzare. Lascia tutto deselezionato per sincronizzare tutti i prodotti."
 
+msgid "Products already on Hou.la stay up to date, even if they leave these categories."
+msgstr "I prodotti già presenti su Hou.la restano aggiornati, anche se escono da queste categorie."
+
 # =====================================================================
 # Price Adjustment
 # =====================================================================

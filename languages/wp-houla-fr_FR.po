@@ -568,6 +568,9 @@ msgstr "Aucune categorie WooCommerce trouvee."
 msgid "Select which categories to sync. Leave all unchecked to sync all products."
 msgstr "Selectionnez les categories a synchroniser. Laissez tout decoche pour synchroniser tous les produits."
 
+msgid "Products already on Hou.la stay up to date, even if they leave these categories."
+msgstr "Les produits deja sur Hou.la restent a jour, meme s'ils sortent de ces categories."
+
 # =====================================================================
 # JS i18n strings (class-wp-houla-admin.php)
 # =====================================================================
