@@ -72,13 +72,14 @@ class Wp_Houla_Metabox {
             wp_send_json_error( __( 'Product not found.', 'wp-houla' ) );
         }
 
-        $sync = new Wp_Houla_Sync();
-        $houla_id = get_post_meta( $product_id, '_wphoula_product_id', true );
+        // Not on_product_updated(): its auto-sync and category guards made this
+        // button answer "success" without sending anything (giamory.com #43452,
+        // 2026-10-07).
+        $sync   = new Wp_Houla_Sync();
+        $result = $sync->sync_product_now( $product_id, $product );
 
-        if ( $houla_id ) {
-            $sync->on_product_updated( $product_id, $product );
-        } else {
-            $sync->on_product_created( $product_id, $product );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
         }
 
         $new_houla_id = get_post_meta( $product_id, '_wphoula_product_id', true );

@@ -232,6 +232,7 @@ class Wp_Houla {
         $this->loader->add_action( 'woocommerce_update_product', $sync, 'on_product_updated', 20, 2 );
         $this->loader->add_action( 'woocommerce_before_delete_product', $sync, 'on_product_deleted', 10, 1 );
         $this->loader->add_action( 'woocommerce_trash_product', $sync, 'on_product_deleted', 10, 1 );
+        $this->loader->add_filter( 'woocommerce_duplicate_product_exclude_meta', $sync, 'exclude_meta_from_duplicate', 10, 1 );
 
         // Stock changes
         $this->loader->add_action( 'woocommerce_product_set_stock', $sync, 'on_stock_changed', 10, 1 );

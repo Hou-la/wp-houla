@@ -271,6 +271,17 @@ class Wp_Houla_Sync {
             return;
         }
 
+        $this->create_on_houla( $product_id, $product );
+    }
+
+    /**
+     * Create the product on Hou.la and link it (no guard: callers decide).
+     *
+     * @param int        $product_id WooCommerce product ID.
+     * @param WC_Product $product    Product object.
+     * @return array|WP_Error API response.
+     */
+    private function create_on_houla( $product_id, $product ) {
         self::$syncing = true;
         $ws_info       = $this->resolve_workspace_for_product( $product );
         $data          = $this->format_product_for_workspace( $product, $ws_info );
@@ -289,9 +300,13 @@ class Wp_Houla_Sync {
         } else {
             $msg = is_wp_error( $result ) ? $result->get_error_message() : 'Unknown error';
             $this->log( 'Failed to create product #' . $product_id . ': ' . $msg );
+            if ( ! is_wp_error( $result ) ) {
+                $result = new WP_Error( 'wphoula_no_id', $msg );
+            }
         }
 
         self::$syncing = false;
+        return $result;
     }
 
     /**
@@ -319,6 +334,18 @@ class Wp_Houla_Sync {
             return;
         }
 
+        $this->update_on_houla( $product_id, $product, $houla_id );
+    }
+
+    /**
+     * Push the product's current data to its Hou.la product (no guard).
+     *
+     * @param int        $product_id WooCommerce product ID.
+     * @param WC_Product $product    Product object.
+     * @param string     $houla_id   Hou.la product ID.
+     * @return array|WP_Error API response.
+     */
+    private function update_on_houla( $product_id, $product, $houla_id ) {
         self::$syncing = true;
         $ws_info       = $this->resolve_workspace_for_product( $product );
         $data          = $this->format_product_for_workspace( $product, $ws_info );
@@ -336,6 +363,52 @@ class Wp_Houla_Sync {
         }
 
         self::$syncing = false;
+        return $result;
+    }
+
+    /**
+     * Manual sync from the product metabox: the seller asked for it explicitly,
+     * so neither the auto-sync switch nor the category filter applies. Returns
+     * the real outcome, so the button never shows a success that did not happen.
+     *
+     * @param int        $product_id WooCommerce product ID.
+     * @param WC_Product $product    Product object.
+     * @return array|WP_Error API response.
+     */
+    public function sync_product_now( $product_id, $product ) {
+        if ( ! $this->auth->is_connected() ) {
+            return new WP_Error( 'wphoula_not_connected', __( 'Not connected to Hou.la.', 'wp-houla' ) );
+        }
+
+        $houla_id = get_post_meta( $product_id, '_wphoula_product_id', true );
+
+        return $houla_id
+            ? $this->update_on_houla( $product_id, $product, $houla_id )
+            : $this->create_on_houla( $product_id, $product );
+    }
+
+    /**
+     * WooCommerce "Duplicate" copies every meta of the original. Hou.la meta
+     * must not follow: the copy would push its edits to the ORIGINAL's Hou.la
+     * product, and reuse its short link and QR code, which open the original's
+     * page. Real case (giamory.com, 2026-10-04): the "silver" copy of a "gold"
+     * product showed hou.la/v0el, a link to the gold product.
+     *
+     * @param array $exclude Meta keys already excluded.
+     * @return array
+     */
+    public function exclude_meta_from_duplicate( $exclude ) {
+        return array_merge( (array) $exclude, array(
+            '_wphoula_product_id',
+            '_wphoula_synced',
+            '_wphoula_sync_at',
+            '_wphoula_workspace_id',
+            '_wphoula_link_id',
+            '_wphoula_shortlink',
+            '_wphoula_qrcode',
+            '_wphoula_qrcode_png',
+            '_wphoula_qrcode_svg',
+        ) );
     }
 
     /**
@@ -463,9 +536,13 @@ class Wp_Houla_Sync {
      * @return array
      */
     private function build_batch_query_args() {
+        // Stable order: the default (post date) splits ties differently from
+        // one page to the next, so a product can be skipped by a whole sync.
         $query_args = array(
-            'status' => 'publish',
-            'return' => 'objects',
+            'status'  => 'publish',
+            'return'  => 'objects',
+            'orderby' => 'ID',
+            'order'   => 'ASC',
         );
 
         $sync_categories = $this->options->get( 'sync_categories' );
@@ -478,7 +555,26 @@ class Wp_Houla_Sync {
                 }
             }
             if ( ! empty( $slugs ) ) {
-                $query_args['category'] = $slugs;
+                // Products in the filter, PLUS those already on Hou.la (see
+                // should_sync_product): a product that left the filter must not
+                // stay frozen on Hou.la.
+                $in_filter = wc_get_products( array(
+                    'status'   => 'publish',
+                    'category' => $slugs,
+                    'limit'    => -1,
+                    'return'   => 'ids',
+                ) );
+                $linked = get_posts( array(
+                    'post_type'      => 'product',
+                    'post_status'    => 'publish',
+                    'meta_key'       => '_wphoula_product_id',
+                    'meta_compare'   => 'EXISTS',
+                    'fields'         => 'ids',
+                    'posts_per_page' => -1,
+                    'no_found_rows'  => true,
+                ) );
+                $ids = array_values( array_unique( array_map( 'absint', array_merge( $in_filter, $linked ) ) ) );
+                $query_args['include'] = ! empty( $ids ) ? $ids : array( 0 );
             }
         }
 
@@ -701,29 +797,8 @@ class Wp_Houla_Sync {
         $skipped = 0;
         $errors  = 0;
 
-        // Category filtering
-        $sync_categories = $this->options->get( 'sync_categories' );
-        $query_args = array(
-            'status' => 'publish',
-            'limit'  => $limit,
-            'page'   => $page,
-            'return' => 'objects',
-        );
-
-        // Filter by WooCommerce categories if configured
-        // wc_get_products 'category' expects slugs, so convert term IDs to slugs
-        if ( ! empty( $sync_categories ) && is_array( $sync_categories ) ) {
-            $slugs = array();
-            foreach ( $sync_categories as $cat_id ) {
-                $term = get_term( absint( $cat_id ), 'product_cat' );
-                if ( $term && ! is_wp_error( $term ) ) {
-                    $slugs[] = $term->slug;
-                }
-            }
-            if ( ! empty( $slugs ) ) {
-                $query_args['category'] = $slugs;
-            }
-        }
+        $query_args          = $this->build_batch_query_args();
+        $query_args['limit'] = $limit;
 
         do {
             $query_args['page'] = $page;
@@ -1726,6 +1801,17 @@ class Wp_Houla_Sync {
     /**
      * Check if a specific product should be synced based on category filters.
      *
+     * The filter decides which products ENTER Hou.la. A product already on
+     * Hou.la (it has a _wphoula_product_id) is always kept up to date, even if
+     * it no longer matches the filter: otherwise it stays on sale on Hou.la with
+     * frozen data (title, price, description), and nothing tells the seller.
+     * Real case (2026-10-07, giamory.com #43452): a product moved from
+     * "Bijoux dorés" to "Bijoux argentés" stopped syncing for three days.
+     *
+     * A product matches when one of its categories, or one of their parents,
+     * is in the filter: the same rule as the batch query (wc_get_products
+     * 'category' includes child categories).
+     *
      * @param int|WC_Product $product Product ID or object.
      * @return bool
      */
@@ -1736,14 +1822,23 @@ class Wp_Houla_Sync {
         }
 
         $product_id = is_object( $product ) ? $product->get_id() : $product;
+
+        if ( get_post_meta( $product_id, '_wphoula_product_id', true ) ) {
+            return true; // Already on Hou.la = keep it in sync
+        }
+
         $product_cats = wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'ids' ) );
 
         if ( is_wp_error( $product_cats ) || empty( $product_cats ) ) {
             return false; // No categories and we have a filter = skip
         }
 
-        // Check if any of the product's categories match the filter
-        return ! empty( array_intersect( $product_cats, array_map( 'absint', $sync_categories ) ) );
+        $with_parents = $product_cats;
+        foreach ( $product_cats as $cat_id ) {
+            $with_parents = array_merge( $with_parents, get_ancestors( $cat_id, 'product_cat', 'taxonomy' ) );
+        }
+
+        return ! empty( array_intersect( array_map( 'absint', $with_parents ), array_map( 'absint', $sync_categories ) ) );
     }
 
     /**
