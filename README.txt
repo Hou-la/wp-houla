@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.4
+Stable tag: 1.6.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,11 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.5 =
+* UN PRODUIT DEJA SUR HOU.LA RESTE A JOUR, MEME S'IL CHANGE DE CATEGORIE. Avec un filtre de categories actif, un produit deplace vers une categorie non cochee n'etait plus synchronise : il restait en vente sur Hou.la avec son ancien titre, son ancien prix et son ancienne description. Le filtre decide maintenant des produits qui ENTRENT sur Hou.la ; ceux qui y sont deja suivent toutes vos modifications. Les sous-categories d'une categorie cochee sont aussi prises en compte.
+* Le bouton « Re-synchroniser » de la fiche produit envoie toujours le produit, quels que soient le filtre de categories et la synchronisation automatique. En cas d'echec, il affiche l'erreur au lieu d'un faux succes.
+* Dupliquer un produit ne recopie plus son lien Hou.la ni son lien court : la copie pointait vers la fiche et la page du produit d'origine. Pour une copie faite avant cette version, cliquez sur « Regenerer » dans l'encart du lien court.
 
 = 1.6.4 =
 * FIN DES FAUSSES « NOUVELLES COMMANDES » DANS L'APP WOOCOMMERCE. Depuis WooCommerce 10.7, la boutique annonce une nouvelle commande des qu'une commande passe d'un statut qu'elle ne connait pas a « Terminee ». Le passage « En cours de livraison (Hou.la) » vers « Terminee », a la livraison, faisait donc sonner le telephone de la vendeuse pour une commande vieille de plusieurs semaines. Une commande qui entre en livraison, ou qui en sort, est desormais consideree comme deja annoncee. La cloture d'un panier ouvert continue de sonner.
