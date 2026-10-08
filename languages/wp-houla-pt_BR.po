@@ -244,10 +244,6 @@ msgid "None yet"
 msgstr "Nenhum ainda"
 
 #: admin/partials/settings-page.php
-msgid "Orders placed through your Hou.la bio page appear in WooCommerce > Orders with the payment method \"Hou.la Pay (Stripe)\"."
-msgstr "Os pedidos feitos pela sua página bio do Hou.la aparecem em WooCommerce > Pedidos com o método de pagamento \"Hou.la Pay (Stripe)\"."
-
-#: admin/partials/settings-page.php
 msgid "Debug Information"
 msgstr "Informações de depuração"
 

@@ -50,12 +50,6 @@ msgid "Invalid signature."
 msgstr "Signature invalide."
 
 #: includes/class-wp-houla-metabox.php
-#: includes/class-wp-houla-post-metabox.php
-#: admin/class-wp-houla-admin.php
-msgid "Permission denied."
-msgstr "Permission refusee."
-
-#: includes/class-wp-houla-metabox.php
 msgid "Product not found."
 msgstr "Produit introuvable."
 
@@ -246,10 +240,6 @@ msgstr "Derniere commande"
 #: admin/partials/settings-page.php
 msgid "None yet"
 msgstr "Aucune pour le moment"
-
-#: admin/partials/settings-page.php
-msgid "Orders placed through your Hou.la bio page appear in WooCommerce > Orders with the payment method \"Hou.la Pay (Stripe)\"."
-msgstr "Les commandes passees via votre page bio Hou.la apparaissent dans WooCommerce > Commandes avec le moyen de paiement \"Hou.la Pay (Stripe)\"."
 
 #: admin/partials/settings-page.php
 msgid "Debug Information"
@@ -455,65 +445,9 @@ msgstr "Associez vos categories WooCommerce aux collections Hou.la. Les produits
 msgid "WooCommerce Category"
 msgstr "Categorie WooCommerce"
 
-#: admin/partials/settings-page.php
-msgid "Hou.la Collection"
-msgstr "Collection Hou.la"
-
-#: admin/partials/settings-page.php
-msgid "- Not mapped -"
-msgstr "- Non associe -"
-
-#: admin/partials/settings-page.php
-msgid "products"
-msgstr "produits"
-
-#: admin/partials/settings-page.php
-msgid "Auto-create collections from categories"
-msgstr "Creer automatiquement les collections depuis les categories"
-
-#: admin/partials/settings-page.php
-msgid "Auto-create will create a Hou.la collection for each WooCommerce category and map them automatically."
-msgstr "La creation automatique creera une collection Hou.la pour chaque categorie WooCommerce et les associera automatiquement."
-
 # =====================================================================
 # Synced Products (settings-page.php)
 # =====================================================================
-
-#: admin/partials/settings-page.php
-msgid "Synced Products"
-msgstr "Produits synchronises"
-
-#: admin/partials/settings-page.php
-msgid "Products currently synchronized on Hou.la from this WooCommerce store."
-msgstr "Produits actuellement synchronises sur Hou.la depuis cette boutique WooCommerce."
-
-#: admin/partials/settings-page.php
-msgid "Loading synced products..."
-msgstr "Chargement des produits synchronises..."
-
-#: admin/partials/settings-page.php
-msgid "Product"
-msgstr "Produit"
-
-#: admin/partials/settings-page.php
-msgid "WC Price"
-msgstr "Prix WC"
-
-#: admin/partials/settings-page.php
-msgid "Hou.la Price"
-msgstr "Prix Hou.la"
-
-#: admin/partials/settings-page.php
-msgid "Stock"
-msgstr "Stock"
-
-#: admin/partials/settings-page.php
-msgid "Last synced"
-msgstr "Derniere synchro"
-
-#: admin/partials/settings-page.php
-msgid "No products synced yet. Click \"Sync All Products Now\" to start."
-msgstr "Aucun produit synchronise. Cliquez sur \"Synchroniser les produits\" pour commencer."
 
 # =====================================================================
 # Debug tab extras (settings-page.php)
@@ -522,10 +456,6 @@ msgstr "Aucun produit synchronise. Cliquez sur \"Synchroniser les produits\" pou
 #: admin/partials/settings-page.php
 msgid "API URL"
 msgstr "URL de l'API"
-
-#: admin/partials/settings-page.php
-msgid "Custom API URL for development. Leave empty for production (https://hou.la)."
-msgstr "URL API personnalisee pour le developpement. Laisser vide pour la production (https://hou.la)."
 
 #. translators: %s: URL
 #: admin/partials/settings-page.php
@@ -539,30 +469,6 @@ msgstr "Astuces dev : utilisez une URL ngrok, une IP locale (ex : http://192.168
 # =====================================================================
 # Connection tab extras (settings-page.php)
 # =====================================================================
-
-#: admin/partials/settings-page.php
-msgid "Shortlink Settings"
-msgstr "Parametres des liens courts"
-
-#: admin/partials/settings-page.php
-msgid "Post types"
-msgstr "Types de contenu"
-
-#: admin/partials/settings-page.php
-msgid "Short links and QR codes will be generated for selected post types."
-msgstr "Les liens courts et QR codes seront generes pour les types de contenu selectionnes."
-
-#: admin/partials/settings-page.php
-msgid "Connect your Hou.la account to generate short links and QR codes for your posts."
-msgstr "Connectez votre compte Hou.la pour generer des liens courts et QR codes pour vos articles."
-
-#: admin/partials/settings-page.php
-msgid "Category filter"
-msgstr "Filtre par categorie"
-
-#: admin/partials/settings-page.php
-msgid "No WooCommerce categories found."
-msgstr "Aucune categorie WooCommerce trouvee."
 
 #: admin/partials/settings-page.php
 msgid "Select which categories to sync. Leave all unchecked to sync all products."
