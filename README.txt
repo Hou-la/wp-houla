@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.5
+Stable tag: 1.6.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,10 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.6 =
+* UN PRODUIT MIS A LA CORBEILLE OU SUPPRIME DANS WOOCOMMERCE QUITTE AUSSI HOU.LA. Quand le lien entre un produit et sa fiche Hou.la etait perime (fiche recreee lors d'une synchronisation complete), la suppression partait vers une fiche qui n'existait plus et echouait : le produit restait en vente sur Hou.la. Le module retrouve maintenant la fiche par l'identifiant WooCommerce du produit, et remet le lien a jour a chaque synchronisation.
+* La corbeille et la suppression definitive sont prises en compte quel que soit le chemin : liste des produits, fiche produit, WP-CLI, API REST ou autre extension. Avant, seules les suppressions faites par WooCommerce lui-meme etaient vues.
 
 = 1.6.5 =
 * UN PRODUIT DEJA SUR HOU.LA RESTE A JOUR, MEME S'IL CHANGE DE CATEGORIE. Avec un filtre de categories actif, un produit deplace vers une categorie non cochee n'etait plus synchronise : il restait en vente sur Hou.la avec son ancien titre, son ancien prix et son ancienne description. Le filtre decide maintenant des produits qui ENTRENT sur Hou.la ; ceux qui y sont deja suivent toutes vos modifications. Les sous-categories d'une categorie cochee sont aussi prises en compte.
