@@ -8,8 +8,7 @@
  * Hooks handled:
  * - woocommerce_new_product          -> create on Hou.la
  * - woocommerce_update_product       -> update on Hou.la
- * - woocommerce_before_delete_product -> delete on Hou.la
- * - woocommerce_trash_product        -> delete on Hou.la
+ * - wp_trash_post / before_delete_post (products) -> delete on Hou.la
  * - woocommerce_product_set_stock    -> update stock on Hou.la
  * - woocommerce_variation_set_stock  -> update stock on Hou.la
  *
@@ -353,6 +352,7 @@ class Wp_Houla_Sync {
         $result        = $this->api->patch( '/ecommerce/products/' . $houla_id, $data, $overrides );
 
         if ( ! is_wp_error( $result ) ) {
+            $this->remember_houla_id( $product_id, $result );
             update_post_meta( $product_id, '_wphoula_sync_at', current_time( 'mysql' ) );
             if ( $ws_info ) {
                 update_post_meta( $product_id, '_wphoula_workspace_id', $ws_info['workspace_id'] );
@@ -412,6 +412,51 @@ class Wp_Houla_Sync {
     }
 
     /**
+     * A post goes to the trash or is deleted for good: only products concern
+     * Hou.la (variations, orders and pages pass through the same hooks).
+     *
+     * @param int $post_id Post ID.
+     */
+    public function on_post_removed( $post_id ) {
+        if ( 'product' !== get_post_type( $post_id ) ) {
+            return;
+        }
+        $this->on_product_deleted( $post_id );
+    }
+
+    /**
+     * Keep `_wphoula_product_id` equal to the product Hou.la answered with. A
+     * batch update matched the product by its WooCommerce ID and never stored
+     * the answer, so a link could point to a Hou.la product that no longer
+     * exists, and every later deletion failed (404).
+     *
+     * @param int   $product_id WooCommerce product ID.
+     * @param mixed $result     API answer (product, or batch detail).
+     */
+    private function remember_houla_id( $product_id, $result ) {
+        if ( ! is_array( $result ) || empty( $result['id'] ) || ! is_string( $result['id'] ) ) {
+            return;
+        }
+        if ( get_post_meta( $product_id, '_wphoula_product_id', true ) !== $result['id'] ) {
+            update_post_meta( $product_id, '_wphoula_product_id', $result['id'] );
+        }
+    }
+
+    /**
+     * Whether an API answer is a 404 (product unknown on Hou.la).
+     *
+     * @param mixed $result API answer.
+     * @return bool
+     */
+    private function is_not_found( $result ) {
+        if ( ! is_wp_error( $result ) ) {
+            return false;
+        }
+        $data = $result->get_error_data();
+        return is_array( $data ) && isset( $data['status'] ) && 404 === (int) $data['status'];
+    }
+
+    /**
      * Triggered when a WooCommerce product is deleted or trashed.
      *
      * @param int $product_id WooCommerce product ID.
@@ -447,6 +492,18 @@ class Wp_Houla_Sync {
         }
 
         $result = $this->api->delete( '/ecommerce/products/' . $houla_id, $overrides );
+
+        // Lien périmé : l'identifiant Hou.la mémorisé n'existe plus (fiche
+        // recréée par un envoi groupé, qui ne mettait pas ce lien à jour avant
+        // la 1.6.6). Hou.la retrouve aussi un produit par son identifiant
+        // WooCommerce. Constat du 2026-10-13 sur giamory.com : 14 suppressions
+        // refusées en 404 depuis le 2026-09-29, produits restés en vente.
+        if ( $this->is_not_found( $result ) ) {
+            $result = $this->api->delete( '/ecommerce/products/' . $product_id, $overrides );
+            if ( $this->is_not_found( $result ) ) {
+                $result = array(); // Absent de Hou.la : rien à supprimer.
+            }
+        }
 
         if ( ! is_wp_error( $result ) ) {
             delete_post_meta( $product_id, '_wphoula_product_id' );
@@ -736,6 +793,7 @@ class Wp_Houla_Sync {
                             $errors++;
                             $this->log( 'Batch update error for WC #' . $wc_id . ': ' . $detail['error'] );
                         } else {
+                            $this->remember_houla_id( $wc_id, $detail );
                             update_post_meta( $wc_id, '_wphoula_synced', 1 );
                             update_post_meta( $wc_id, '_wphoula_sync_at', current_time( 'mysql' ) );
                             if ( $ws_info ) {
@@ -824,9 +882,7 @@ class Wp_Houla_Sync {
                     continue;
                 }
 
-                if ( ! $houla_id && isset( $result['id'] ) ) {
-                    update_post_meta( $product_id, '_wphoula_product_id', $result['id'] );
-                }
+                $this->remember_houla_id( $product_id, $result );
 
                 update_post_meta( $product_id, '_wphoula_synced', 1 );
                 update_post_meta( $product_id, '_wphoula_sync_at', current_time( 'mysql' ) );

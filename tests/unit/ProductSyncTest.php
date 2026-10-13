@@ -6,6 +6,11 @@
  * le 2026-10-04. Le filtre de catégories l'a figé sur Hou.la (titre, prix,
  * description) et le bouton « Re-synchroniser » répondait « succès » sans rien
  * envoyer. Sa copie avait aussi hérité du lien court du produit d'origine.
+ *
+ * Cas réel du 2026-10-13 (giamory.com) : 49 produits à la corbeille ou supprimés
+ * dans WooCommerce, toujours en vente sur Hou.la. Les suppressions partaient
+ * vers un identifiant Hou.la périmé (404, 14 fois depuis le 2026-09-29), et la
+ * corbeille de l'administration ne passe pas par les crochets WooCommerce.
  */
 
 namespace WpHoula\Tests\Unit;
@@ -35,6 +40,7 @@ class ProductSyncTest extends TestCase {
         $this->cats      = array();
         $this->ancestors = array();
         $this->calls     = array();
+        $this->post_types = array();
 
         Functions\when( 'get_post_meta' )->alias( function ( $id, $key = '', $single = false ) {
             return $this->meta[ $id ][ $key ] ?? '';
@@ -65,14 +71,25 @@ class ProductSyncTest extends TestCase {
         Functions\when( 'is_wp_error' )->alias( function ( $thing ) {
             return $thing instanceof \WP_Error;
         } );
+        Functions\when( 'delete_post_meta' )->alias( function ( $id, $key ) {
+            unset( $this->meta[ $id ][ $key ] );
+            return true;
+        } );
+        Functions\when( 'get_post_type' )->alias( function ( $id ) {
+            return $this->post_types[ $id ] ?? 'product';
+        } );
     }
+
+    /** @var array<int, string> post type by ID (default: product) */
+    private $post_types = array();
 
     /**
      * Build the sync service with in-memory options, auth and API doubles.
      *
      * @param array      $options    Plugin options.
      * @param bool       $connected  Whether the site is connected to Hou.la.
-     * @param mixed      $api_result What every API call returns.
+     * @param mixed      $api_result What every API call returns, or a callable
+     *                               ( $method, $endpoint ) that decides.
      */
     private function makeSync( array $options, $connected = true, $api_result = array( 'id' => 'houla-new' ) ) {
         $ref  = new \ReflectionClass( \Wp_Houla_Sync::class );
@@ -103,8 +120,10 @@ class ProductSyncTest extends TestCase {
             private $t;
             private $r;
             public function __construct( $t, $r ) { $this->t = $t; $this->r = $r; }
-            public function post( $endpoint, $data = array(), $o = array() ) { $this->t->recordCall( 'POST', $endpoint ); return $this->r; }
-            public function patch( $endpoint, $data = array(), $o = array() ) { $this->t->recordCall( 'PATCH', $endpoint ); return $this->r; }
+            private function answer( $m, $e ) { $this->t->recordCall( $m, $e ); return is_callable( $this->r ) ? call_user_func( $this->r, $m, $e ) : $this->r; }
+            public function post( $endpoint, $data = array(), $o = array() ) { return $this->answer( 'POST', $endpoint ); }
+            public function patch( $endpoint, $data = array(), $o = array() ) { return $this->answer( 'PATCH', $endpoint ); }
+            public function delete( $endpoint, $o = array() ) { return $this->answer( 'DELETE', $endpoint ); }
         } );
 
         return $sync;
@@ -211,6 +230,93 @@ class ProductSyncTest extends TestCase {
         $this->assertNotInstanceOf( \WP_Error::class, $result );
         $this->assertSame( array( array( 'POST', '/ecommerce/products' ) ), $this->calls );
         $this->assertSame( 'houla-new', $this->meta[43445]['_wphoula_product_id'] );
+    }
+
+    // ── Trash / delete (2026-10-13) ─────────────────────────────────────
+
+    private function notFound() {
+        return new \WP_Error( 'wphoula_api_error', 'Product with id/external_id not found', array( 'status' => 404 ) );
+    }
+
+    public function test_trash_with_stale_link_deletes_by_woocommerce_id() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, function ( $m, $e ) {
+            return '/ecommerce/products/449eb9fe' === $e ? $this->notFound() : null;
+        } );
+        $this->meta[41416]['_wphoula_product_id'] = '449eb9fe';
+
+        $sync->on_post_removed( 41416 );
+
+        // Avant la 1.6.6 : un seul DELETE, 404, et le produit restait en vente.
+        $this->assertSame(
+            array( array( 'DELETE', '/ecommerce/products/449eb9fe' ), array( 'DELETE', '/ecommerce/products/41416' ) ),
+            $this->calls
+        );
+        $this->assertArrayNotHasKey( '_wphoula_product_id', $this->meta[41416] );
+    }
+
+    /** Contre-témoin : lien juste, une seule suppression. */
+    public function test_trash_with_valid_link_deletes_once() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, null );
+        $this->meta[41084]['_wphoula_product_id'] = '020040d3';
+
+        $sync->on_post_removed( 41084 );
+
+        $this->assertSame( array( array( 'DELETE', '/ecommerce/products/020040d3' ) ), $this->calls );
+        $this->assertArrayNotHasKey( '_wphoula_product_id', $this->meta[41084] );
+    }
+
+    /** Contre-témoin : Hou.la injoignable, le lien est gardé (rien n'est perdu). */
+    public function test_trash_when_api_fails_keeps_the_link() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, new \WP_Error( 'wphoula_api_error', 'Boom', array( 'status' => 503 ) ) );
+        $this->meta[41084]['_wphoula_product_id'] = '020040d3';
+
+        $sync->on_post_removed( 41084 );
+
+        $this->assertCount( 1, $this->calls );
+        $this->assertSame( '020040d3', $this->meta[41084]['_wphoula_product_id'] );
+    }
+
+    public function test_product_absent_from_houla_under_both_ids_is_unlinked() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, function () {
+            return $this->notFound();
+        } );
+        $this->meta[41416]['_wphoula_product_id'] = '449eb9fe';
+
+        $sync->on_post_removed( 41416 );
+
+        $this->assertCount( 2, $this->calls );
+        $this->assertArrayNotHasKey( '_wphoula_product_id', $this->meta[41416] );
+    }
+
+    /** Contre-témoin : une variation, une page ou une commande ne touche pas Hou.la. */
+    public function test_removing_something_else_than_a_product_sends_nothing() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ) );
+        $this->post_types[43453] = 'product_variation';
+        $this->meta[43453]['_wphoula_product_id'] = 'x';
+
+        $sync->on_post_removed( 43453 );
+
+        $this->assertSame( array(), $this->calls );
+    }
+
+    public function test_update_refreshes_a_stale_link() {
+        $sync = $this->makeSync( array(), true, array( 'id' => 'b57c1e2a' ) );
+        $this->meta[41416]['_wphoula_product_id'] = '449eb9fe';
+
+        $sync->sync_product_now( 41416, $this->makeProduct( 41416 ) );
+
+        // Avant la 1.6.6 : le lien périmé restait, et la suppression suivante échouait.
+        $this->assertSame( 'b57c1e2a', $this->meta[41416]['_wphoula_product_id'] );
+    }
+
+    /** Contre-témoin : réponse sans identifiant (erreur, corps vide) → lien intact. */
+    public function test_update_without_id_keeps_the_link() {
+        $sync = $this->makeSync( array(), true, array() );
+        $this->meta[41416]['_wphoula_product_id'] = '449eb9fe';
+
+        $sync->sync_product_now( 41416, $this->makeProduct( 41416 ) );
+
+        $this->assertSame( '449eb9fe', $this->meta[41416]['_wphoula_product_id'] );
     }
 
     // ── Duplicate ───────────────────────────────────────────────────────

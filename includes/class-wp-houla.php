@@ -230,8 +230,17 @@ class Wp_Houla {
         // Product lifecycle
         $this->loader->add_action( 'woocommerce_new_product', $sync, 'on_product_created', 20, 2 );
         $this->loader->add_action( 'woocommerce_update_product', $sync, 'on_product_updated', 20, 2 );
-        $this->loader->add_action( 'woocommerce_before_delete_product', $sync, 'on_product_deleted', 10, 1 );
-        $this->loader->add_action( 'woocommerce_trash_product', $sync, 'on_product_deleted', 10, 1 );
+        // Corbeille et suppression définitive, quel que soit le chemin (liste
+        // des produits, WP-CLI, REST, autre extension). Les crochets WooCommerce
+        // `woocommerce_trash_product` et `woocommerce_before_delete_product` ne
+        // partent que de son propre `$product->delete()` (WC 11.1.2,
+        // class-wc-product-data-store-cpt.php::delete), alors que la corbeille
+        // de l'administration appelle `wp_trash_post()` directement
+        // (wp-admin/edit.php, wp-admin/post.php). Constat du 2026-10-13 :
+        // 49 produits de giamory.com à la corbeille ou supprimés, toujours en
+        // vente sur Hou.la.
+        $this->loader->add_action( 'wp_trash_post', $sync, 'on_post_removed', 10, 1 );
+        $this->loader->add_action( 'before_delete_post', $sync, 'on_post_removed', 10, 1 );
         $this->loader->add_filter( 'woocommerce_duplicate_product_exclude_meta', $sync, 'exclude_meta_from_duplicate', 10, 1 );
 
         // Stock changes
