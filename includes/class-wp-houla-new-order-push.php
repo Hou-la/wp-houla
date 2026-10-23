@@ -27,8 +27,17 @@
  * venir ; sortir couvre celles qui attendaient déjà en livraison avant ce
  * correctif.
  *
- * La clôture d'un panier ouvert (open-cart → processing) n'est PAS touchée :
- * c'est aujourd'hui le seul moment où une commande de live sonne.
+ * ~~La clôture d'un panier ouvert (open-cart → processing) n'est PAS touchée :
+ * c'est aujourd'hui le seul moment où une commande de live sonne.~~ PÉRIMÉ le
+ * 2026-10-23 : le panier ouvert est traité comme l'acheminement. Quand il
+ * expire, Hou.la le passe à « En cours », et pour WooCommerce ce passage
+ * open-cart → processing est une vente neuve : la vendeuse recevait « You have
+ * a new order! » pour une commande déjà synchronisée et déjà connue (vendue en
+ * live, visible dans WooCommerce depuis l'ouverture du panier). Une commande
+ * créée directement « En cours » (hors panier ouvert) sonne toujours à sa
+ * création : WooCommerce la notifie sur `woocommerce_new_order`.
+ * Re-vérifier le déclencheur : NewOrderNotificationTrigger::on_new_order et
+ * ::on_order_status_changed dans woocommerce/src/Internal/PushNotifications/Triggers.
  *
  * Si WooCommerce renomme un jour cette méta, la garde devient inerte (retour au
  * comportement d'avant, une sonnerie de trop) : elle ne casse rien.
@@ -44,9 +53,10 @@
 class Wp_Houla_New_Order_Push {
 
     /**
-     * Statuts Hou.la de la phase d'acheminement (sans le préfixe « wc- »).
+     * Statuts Hou.la où la vendeuse connaît déjà la commande (sans le préfixe
+     * « wc- ») : le panier ouvert, puis la phase d'acheminement.
      */
-    const FULFILMENT_STATUSES = array( 'houla-shipping', 'houla-returned' );
+    const ALREADY_KNOWN_STATUSES = array( 'open-cart', 'houla-shipping', 'houla-returned' );
 
     /**
      * Classe WooCommerce (interne, >= 10.7) qui porte la clé « déjà envoyée ».
@@ -82,8 +92,8 @@ class Wp_Houla_New_Order_Push {
         $old = preg_replace( '/^wc-/', '', (string) $old_status );
         $new = preg_replace( '/^wc-/', '', (string) $new_status );
 
-        if ( ! in_array( $old, self::FULFILMENT_STATUSES, true )
-            && ! in_array( $new, self::FULFILMENT_STATUSES, true ) ) {
+        if ( ! in_array( $old, self::ALREADY_KNOWN_STATUSES, true )
+            && ! in_array( $new, self::ALREADY_KNOWN_STATUSES, true ) ) {
             return;
         }
 

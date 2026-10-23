@@ -65,16 +65,25 @@ namespace WpHoula\Tests\Unit {
         }
 
         /**
-         * Contre-témoin : la clôture d'un panier ouvert est le seul moment où une
-         * commande de live sonne. Elle doit rester intacte.
+         * Panier ouvert expiré : Hou.la le passe à « En cours ». La commande est
+         * déjà synchronisée, ce n'est pas une nouvelle vente.
          */
-        public function test_open_cart_close_is_left_to_woocommerce() {
+        public function test_expired_open_cart_is_marked_as_already_announced() {
             $order = $this->makeOrder();
 
-            ( new \Wp_Houla_New_Order_Push() )->on_order_status_changed( 1, 'open-cart', 'processing', $order );
+            ( new \Wp_Houla_New_Order_Push() )->on_order_status_changed( 1, 'wc-open-cart', 'wc-processing', $order );
 
-            $this->assertSame( array(), $order->meta );
-            $this->assertSame( 0, $order->saved );
+            $this->assertArrayHasKey( self::SENT, $order->meta );
+            $this->assertStringStartsWith( 'open-cart -> processing @ ', $order->meta['_houla_new_order_push_suppressed'] );
+            $this->assertSame( 1, $order->saved );
+        }
+
+        public function test_opening_a_cart_marks_the_order_for_its_future_close() {
+            $order = $this->makeOrder();
+
+            ( new \Wp_Houla_New_Order_Push() )->on_order_status_changed( 1, 'pending', 'open-cart', $order );
+
+            $this->assertArrayHasKey( self::SENT, $order->meta );
         }
 
         public function test_ordinary_transitions_are_left_to_woocommerce() {
