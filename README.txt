@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.6
+Stable tag: 1.6.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,9 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.7 =
+* PLUS DE FAUSSE « NOUVELLE COMMANDE » QUAND UN PANIER OUVERT EXPIRE. A l'expiration d'un panier ouvert, Hou.la passe la commande a « En cours » ; l'application WooCommerce prenait ce passage pour une vente neuve et faisait sonner le telephone, alors que la commande etait deja dans votre boutique depuis l'ouverture du panier. Ce passage ne declenche plus de notification. Une commande arrivee directement « En cours » vous est toujours annoncee.
 
 = 1.6.6 =
 * UN PRODUIT MIS A LA CORBEILLE OU SUPPRIME DANS WOOCOMMERCE QUITTE AUSSI HOU.LA. Quand le lien entre un produit et sa fiche Hou.la etait perime (fiche recreee lors d'une synchronisation complete), la suppression partait vers une fiche qui n'existait plus et echouait : le produit restait en vente sur Hou.la. Le module retrouve maintenant la fiche par l'identifiant WooCommerce du produit, et remet le lien a jour a chaque synchronisation.
