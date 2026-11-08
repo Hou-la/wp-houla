@@ -40,6 +40,7 @@ class ProductSyncTest extends TestCase {
         $this->cats      = array();
         $this->ancestors = array();
         $this->calls     = array();
+        $this->payloads  = array();
         $this->post_types = array();
 
         Functions\when( 'get_post_meta' )->alias( function ( $id, $key = '', $single = false ) {
@@ -120,17 +121,30 @@ class ProductSyncTest extends TestCase {
             private $t;
             private $r;
             public function __construct( $t, $r ) { $this->t = $t; $this->r = $r; }
-            private function answer( $m, $e ) { $this->t->recordCall( $m, $e ); return is_callable( $this->r ) ? call_user_func( $this->r, $m, $e ) : $this->r; }
-            public function post( $endpoint, $data = array(), $o = array() ) { return $this->answer( 'POST', $endpoint ); }
-            public function patch( $endpoint, $data = array(), $o = array() ) { return $this->answer( 'PATCH', $endpoint ); }
+            private function answer( $m, $e, $d = array() ) { $this->t->recordCall( $m, $e, $d ); return is_callable( $this->r ) ? call_user_func( $this->r, $m, $e ) : $this->r; }
+            public function post( $endpoint, $data = array(), $o = array() ) { return $this->answer( 'POST', $endpoint, $data ); }
+            public function patch( $endpoint, $data = array(), $o = array() ) { return $this->answer( 'PATCH', $endpoint, $data ); }
             public function delete( $endpoint, $o = array() ) { return $this->answer( 'DELETE', $endpoint ); }
         } );
 
         return $sync;
     }
 
-    public function recordCall( $method, $endpoint ) {
-        $this->calls[] = array( $method, $endpoint );
+    public function recordCall( $method, $endpoint, $data = array() ) {
+        $this->calls[]    = array( $method, $endpoint );
+        $this->payloads[] = $data;
+    }
+
+    /** @var array payloads sent, in the order of $calls */
+    private $payloads = array();
+
+    /** @return object the options double of a sync built by makeSync */
+    private function optionsOf( $sync ) {
+        $prop = new \ReflectionProperty( $sync, 'options' );
+        if ( PHP_VERSION_ID < 80100 ) {
+            $prop->setAccessible( true );
+        }
+        return $prop->getValue( $sync );
     }
 
     private function callPrivate( $object, $method, ...$args ) {
@@ -141,11 +155,13 @@ class ProductSyncTest extends TestCase {
         return $m->invoke( $object, ...$args );
     }
 
-    private function makeProduct( $id ) {
-        return new class( $id ) {
+    private function makeProduct( $id, $weight = '' ) {
+        return new class( $id, $weight ) {
             private $id;
-            public function __construct( $id ) { $this->id = $id; }
+            private $weight;
+            public function __construct( $id, $weight ) { $this->id = $id; $this->weight = $weight; }
             public function get_id() { return $this->id; }
+            public function get_weight() { return $this->weight; }
             public function get_type() { return 'simple'; }
             public function is_type( $t ) { return 'simple' === $t; }
             public function get_name() { return 'Mystery Bubble Tea ( Bijoux silver)'; }
@@ -161,12 +177,159 @@ class ProductSyncTest extends TestCase {
 
     // ── Category filter ─────────────────────────────────────────────────
 
-    public function test_product_already_on_houla_stays_synced_outside_the_filter() {
+    /**
+     * Les Perles de Jo (2026-11-08) : tout le catalogue déjà sur Hou.la, puis
+     * 2 catégories cochées. Jusqu'à la 1.6.7, un produit lié passait TOUJOURS
+     * le filtre : les ~600 produits restaient en vente.
+     */
+    public function test_product_already_on_houla_outside_the_filter_is_out_of_scope() {
         $sync = $this->makeSync( array( 'sync_categories' => array( 727 ) ) );
         $this->cats[43452] = array( 906 );
         $this->meta[43452]['_wphoula_product_id'] = 'f8c0dfb9';
 
-        $this->assertTrue( $this->callPrivate( $sync, 'should_sync_product', 43452 ) );
+        $this->assertFalse( $this->callPrivate( $sync, 'should_sync_product', 43452 ) );
+    }
+
+    /**
+     * Sorti du filtre, il n'est ni figé (giamory #43452) ni supprimé : il part
+     * en brouillon, avec ses données à jour.
+     */
+    public function test_update_of_linked_product_outside_the_filter_takes_it_offline() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ), 'auto_sync' => true ) );
+        $this->cats[43452] = array( 906 );
+        $this->meta[43452]['_wphoula_product_id'] = 'f8c0dfb9';
+
+        $sync->on_product_updated( 43452, $this->makeProduct( 43452 ) );
+
+        $this->assertSame( array( array( 'PATCH', '/ecommerce/products/f8c0dfb9' ) ), $this->calls );
+        $this->assertSame( 'draft', $this->payloads[0]['status'] );
+    }
+
+    /** Contre-témoin : dans le filtre, il reste publié. */
+    public function test_update_of_linked_product_inside_the_filter_stays_active() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ), 'auto_sync' => true ) );
+        $this->cats[43452] = array( 727 );
+        $this->meta[43452]['_wphoula_product_id'] = 'f8c0dfb9';
+
+        $sync->on_product_updated( 43452, $this->makeProduct( 43452 ) );
+
+        $this->assertSame( 'active', $this->payloads[0]['status'] );
+    }
+
+    /** Contre-témoin : sans lien Hou.la et hors filtre, rien ne part. */
+    public function test_update_of_unlinked_product_outside_the_filter_sends_nothing() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ), 'auto_sync' => true, 'sync_on_publish' => true ) );
+        $this->cats[43445] = array( 906 );
+
+        $sync->on_product_updated( 43445, $this->makeProduct( 43445 ) );
+
+        $this->assertSame( array(), $this->calls );
+    }
+
+    // ── Products chosen one by one ──────────────────────────────────────
+
+    public function test_product_chosen_one_by_one_is_in_scope_outside_the_categories() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ), 'sync_products' => array( '43445' ) ) );
+        $this->cats[43445] = array( 906 );
+
+        $this->assertTrue( $this->callPrivate( $sync, 'should_sync_product', 43445 ) );
+    }
+
+    public function test_products_chosen_without_category_limit_the_scope_to_them() {
+        $sync = $this->makeSync( array( 'sync_categories' => array(), 'sync_products' => array( 43445 ) ) );
+        $this->cats[43446] = array( 727 );
+
+        $this->assertTrue( $this->callPrivate( $sync, 'should_sync_product', 43445 ) );
+        $this->assertFalse( $this->callPrivate( $sync, 'should_sync_product', 43446 ) );
+    }
+
+    /** Contre-témoin : aucun filtre = tout le catalogue. */
+    public function test_no_filter_at_all_syncs_everything() {
+        $sync = $this->makeSync( array( 'sync_categories' => array(), 'sync_products' => array() ) );
+
+        $this->assertTrue( $this->callPrivate( $sync, 'should_sync_product', 43446 ) );
+    }
+
+    public function test_manual_sync_outside_the_filter_adds_the_product_to_the_selection() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ), 'sync_products' => array() ) );
+        $this->cats[43445] = array( 906 );
+
+        $sync->sync_product_now( 43445, $this->makeProduct( 43445 ) );
+
+        $this->assertSame( array( 43445 ), $this->optionsOf( $sync )->get( 'sync_products' ) );
+    }
+
+    /** Contre-témoin : sans filtre, l'ajouter réduirait le catalogue à ce seul produit. */
+    public function test_manual_sync_without_filter_keeps_the_selection_empty() {
+        $sync = $this->makeSync( array( 'sync_categories' => array(), 'sync_products' => array() ) );
+
+        $sync->sync_product_now( 43445, $this->makeProduct( 43445 ) );
+
+        $this->assertSame( array(), $this->optionsOf( $sync )->get( 'sync_products' ) );
+    }
+
+    // ── Batch sync and the filter ───────────────────────────────────────
+
+    public function test_batch_sends_linked_products_outside_the_filter_as_drafts_and_never_creates_them() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ), 'auto_sync' => true ), true, array( 'details' => array( array( 'id' => 'x' ) ) ) );
+        $this->cats[1] = array( 727 ); // in the filter, not yet on Hou.la
+        $this->cats[2] = array( 906 ); // left the filter, on Hou.la
+        $this->meta[2]['_wphoula_product_id'] = 'p2';
+        $this->cats[3] = array( 906 ); // outside, not on Hou.la
+        $products = array( $this->makeProduct( 1 ), $this->makeProduct( 2 ), $this->makeProduct( 3 ) );
+        if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+            define( 'HOUR_IN_SECONDS', 3600 );
+        }
+        Functions\when( 'wc_get_products' )->alias( function ( $args ) use ( $products ) {
+            return ( $args['return'] ?? '' ) === 'ids' ? array( 1 ) : $products;
+        } );
+        Functions\when( 'get_term' )->justReturn( (object) array( 'slug' => 'perles' ) );
+        Functions\when( 'get_posts' )->justReturn( array( 2 ) );
+        Functions\when( 'get_transient' )->justReturn( 0 );
+        Functions\when( 'set_transient' )->justReturn( true );
+        Functions\when( 'delete_transient' )->justReturn( true );
+
+        $sync->batch_sync_page( 2 );
+
+        $this->assertSame( array( array( 'POST', '/ecommerce/products/batch' ), array( 'POST', '/ecommerce/products/batch' ) ), $this->calls );
+        $created = $this->payloads[0]['products'];
+        $updated = $this->payloads[1]['products'];
+        $this->assertSame( array( '1' ), array_column( $created, 'external_id' ) );
+        $this->assertSame( 'active', $created[0]['status'] );
+        $this->assertSame( array( '2' ), array_column( $updated, 'external_id' ) );
+        $this->assertSame( 'draft', $updated[0]['status'] );
+    }
+
+    // ── Weight unit (2026-11-08) ────────────────────────────────────────
+
+    public function test_weight_in_grams_is_sent_in_kilograms() {
+        $this->assertSame( '0.075', \Wp_Houla_Sync::weight_to_kg( '75', 'g' ) );
+        $this->assertSame( '1.5', \Wp_Houla_Sync::weight_to_kg( '1500', 'g' ) );
+    }
+
+    public function test_weight_in_pounds_and_ounces_is_sent_in_kilograms() {
+        $this->assertSame( '0.453592', \Wp_Houla_Sync::weight_to_kg( '1', 'lbs' ) );
+        $this->assertSame( '0.02835', \Wp_Houla_Sync::weight_to_kg( '1', 'oz' ) );
+        $this->assertSame( '0.226796', \Wp_Houla_Sync::weight_to_kg( '8', 'oz' ) );
+    }
+
+    /** Contre-témoin : en kg, la valeur repart à l'identique (l'empreinte de modération ne bouge pas). */
+    public function test_weight_in_kilograms_is_sent_unchanged() {
+        $this->assertSame( '0.50', \Wp_Houla_Sync::weight_to_kg( '0.50', 'kg' ) );
+        $this->assertSame( '', \Wp_Houla_Sync::weight_to_kg( '', 'g' ) );
+    }
+
+    public function test_product_payload_carries_the_weight_in_kilograms() {
+        $sync = $this->makeSync( array() );
+        Functions\when( 'get_option' )->alias( function ( $key ) {
+            return 'woocommerce_weight_unit' === $key ? 'g' : '';
+        } );
+
+        $data = $this->callPrivate( $sync, 'format_product', $this->makeProduct( 43445, '75' ) );
+
+        // Avant : '75', lu comme 75 kg par Hou.la.
+        $this->assertSame( '0.075', $data['weight'] );
+        $this->assertSame( 'kg', $data['weight_unit'] );
     }
 
     /** Contre-témoin : sans lien Hou.la, le filtre garde la porte d'entrée. */

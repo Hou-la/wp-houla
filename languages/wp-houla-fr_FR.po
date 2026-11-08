@@ -841,3 +841,27 @@ msgstr "(%d au total)"
 #: admin/class-wp-houla-admin.php
 msgid "Error:"
 msgstr "Erreur :"
+
+#: admin/partials/settings-page.php
+msgid "A product that leaves the filter is taken offline on Hou.la (never deleted), and comes back online if it returns."
+msgstr "Un produit qui sort du filtre est mis hors ligne sur Hou.la (jamais supprimé), et revient en ligne s'il y revient."
+
+#: admin/partials/settings-page.php
+msgid "Products chosen one by one"
+msgstr "Produits choisis un par un"
+
+#: admin/partials/settings-page.php
+msgid "Search a product (name or SKU)..."
+msgstr "Rechercher un produit (nom ou référence)..."
+
+#: admin/partials/settings-page.php
+msgid "No product chosen."
+msgstr "Aucun produit choisi."
+
+#: admin/partials/settings-page.php
+msgid "Synced in addition to the categories above. With no category and no product chosen, the whole catalogue is synced."
+msgstr "Synchronisés en plus des catégories ci-dessus. Sans catégorie ni produit choisi, tout le catalogue est synchronisé."
+
+#: admin/class-wp-houla-admin.php
+msgid "No product found."
+msgstr "Aucun produit trouvé."

@@ -36,6 +36,7 @@ class Wp_Houla_Options {
             'auto_sync'          => true,
             'sync_on_publish'    => true,
             'sync_categories'    => array(),  // WooCommerce category IDs to sync (empty = all)
+            'sync_products'      => array(),  // WooCommerce product IDs chosen one by one (union with categories)
             'last_full_sync'     => 0,
             'products_synced'    => 0,
             // Webhook

@@ -278,12 +278,16 @@ class Wp_Houla_Sync {
      *
      * @param int        $product_id WooCommerce product ID.
      * @param WC_Product $product    Product object.
+     * @param bool       $explicit   Asked by the seller (metabox button).
      * @return array|WP_Error API response.
      */
-    private function create_on_houla( $product_id, $product ) {
+    private function create_on_houla( $product_id, $product, $explicit = false ) {
         self::$syncing = true;
         $ws_info       = $this->resolve_workspace_for_product( $product );
         $data          = $this->format_product_for_workspace( $product, $ws_info );
+        if ( $explicit ) {
+            $data['restore_withdrawn'] = true;
+        }
         $overrides     = $ws_info ? $ws_info['overrides'] : array();
         $result        = $this->api->post( '/ecommerce/products', $data, $overrides );
 
@@ -319,12 +323,18 @@ class Wp_Houla_Sync {
             return;
         }
 
-        // Category filter check
+        $houla_id = get_post_meta( $product_id, '_wphoula_product_id', true );
+
+        // Sync filter (categories + products): a product outside it never
+        // enters Hou.la, and one already there is taken OFFLINE (sent as a
+        // draft: kept, data fresh, never deleted), see should_sync_product.
         if ( ! $this->should_sync_product( $product ) ) {
+            if ( ! empty( $houla_id ) ) {
+                $this->update_on_houla( $product_id, $product, $houla_id, true );
+            }
             return;
         }
 
-        $houla_id = get_post_meta( $product_id, '_wphoula_product_id', true );
         if ( empty( $houla_id ) ) {
             // Not yet synced - create it if auto_sync is on
             if ( $this->options->get( 'auto_sync' ) ) {
@@ -342,12 +352,23 @@ class Wp_Houla_Sync {
      * @param int        $product_id WooCommerce product ID.
      * @param WC_Product $product    Product object.
      * @param string     $houla_id   Hou.la product ID.
+     * @param bool       $offline    Outside the sync filter: sent as a draft.
+     * @param bool       $explicit   Asked by the seller (metabox button): a
+     *                               product she withdrew on Hou.la comes back.
      * @return array|WP_Error API response.
      */
-    private function update_on_houla( $product_id, $product, $houla_id ) {
+    private function update_on_houla( $product_id, $product, $houla_id, $offline = false, $explicit = false ) {
         self::$syncing = true;
         $ws_info       = $this->resolve_workspace_for_product( $product );
         $data          = $this->format_product_for_workspace( $product, $ws_info );
+        if ( $offline ) {
+            $data['status'] = 'draft';
+        }
+        if ( $explicit ) {
+            // Hou.la no longer restores nor republishes a product the seller
+            // deleted or took offline ON HOU.LA, except on this explicit request.
+            $data['restore_withdrawn'] = true;
+        }
         $overrides     = $ws_info ? $ws_info['overrides'] : array();
         $result        = $this->api->patch( '/ecommerce/products/' . $houla_id, $data, $overrides );
 
@@ -382,9 +403,19 @@ class Wp_Houla_Sync {
 
         $houla_id = get_post_meta( $product_id, '_wphoula_product_id', true );
 
+        // The seller asked for THIS product: add it to the product selection,
+        // otherwise the next automatic sync would take it offline again. Only
+        // when a filter is set: with no filter, a one-product selection would
+        // shrink the scope to that single product.
+        if ( $this->has_sync_filter() && ! $this->should_sync_product( $product ) ) {
+            $selected   = (array) $this->options->get( 'sync_products' );
+            $selected[] = absint( $product_id );
+            $this->options->set( 'sync_products', array_values( array_unique( array_map( 'absint', $selected ) ) ) );
+        }
+
         return $houla_id
-            ? $this->update_on_houla( $product_id, $product, $houla_id )
-            : $this->create_on_houla( $product_id, $product );
+            ? $this->update_on_houla( $product_id, $product, $houla_id, false, true )
+            : $this->create_on_houla( $product_id, $product, true );
     }
 
     /**
@@ -602,37 +633,38 @@ class Wp_Houla_Sync {
             'order'   => 'ASC',
         );
 
-        $sync_categories = $this->options->get( 'sync_categories' );
-        if ( ! empty( $sync_categories ) && is_array( $sync_categories ) ) {
-            $slugs = array();
+        if ( $this->has_sync_filter() ) {
+            $sync_categories = (array) $this->options->get( 'sync_categories' );
+            $slugs           = array();
             foreach ( $sync_categories as $cat_id ) {
                 $term = get_term( absint( $cat_id ), 'product_cat' );
                 if ( $term && ! is_wp_error( $term ) ) {
                     $slugs[] = $term->slug;
                 }
             }
+            $in_filter = array_map( 'absint', (array) $this->options->get( 'sync_products' ) );
             if ( ! empty( $slugs ) ) {
-                // Products in the filter, PLUS those already on Hou.la (see
-                // should_sync_product): a product that left the filter must not
-                // stay frozen on Hou.la.
-                $in_filter = wc_get_products( array(
+                $in_filter = array_merge( $in_filter, wc_get_products( array(
                     'status'   => 'publish',
                     'category' => $slugs,
                     'limit'    => -1,
                     'return'   => 'ids',
-                ) );
-                $linked = get_posts( array(
-                    'post_type'      => 'product',
-                    'post_status'    => 'publish',
-                    'meta_key'       => '_wphoula_product_id',
-                    'meta_compare'   => 'EXISTS',
-                    'fields'         => 'ids',
-                    'posts_per_page' => -1,
-                    'no_found_rows'  => true,
-                ) );
-                $ids = array_values( array_unique( array_map( 'absint', array_merge( $in_filter, $linked ) ) ) );
-                $query_args['include'] = ! empty( $ids ) ? $ids : array( 0 );
+                ) ) );
             }
+            // Products in the filter, PLUS those already on Hou.la: one that
+            // left the filter is sent OFFLINE (draft) by the batch, instead
+            // of staying on sale with frozen data (see should_sync_product).
+            $linked = get_posts( array(
+                'post_type'      => 'product',
+                'post_status'    => 'publish',
+                'meta_key'       => '_wphoula_product_id',
+                'meta_compare'   => 'EXISTS',
+                'fields'         => 'ids',
+                'posts_per_page' => -1,
+                'no_found_rows'  => true,
+            ) );
+            $ids = array_values( array_unique( array_map( 'absint', array_merge( $in_filter, $linked ) ) ) );
+            $query_args['include'] = ! empty( $ids ) ? $ids : array( 0 );
         }
 
         return $query_args;
@@ -699,7 +731,15 @@ class Wp_Houla_Sync {
                 );
             }
 
+            $in_scope = $this->should_sync_product( $product );
+            if ( ! $in_scope && ! $houla_id ) {
+                continue; // Outside the filter and not on Hou.la: never created.
+            }
+
             $data = $this->format_product_for_workspace( $product, $ws_info );
+            if ( ! $in_scope ) {
+                $data['status'] = 'draft'; // Left the filter: offline on Hou.la, kept.
+            }
 
             if ( $houla_id ) {
                 $groups[ $group_key ]['update'][] = array( 'wc_id' => $product_id, 'houla_id' => $houla_id, 'data' => $data );
@@ -867,7 +907,15 @@ class Wp_Houla_Sync {
                 $product_id = $product->get_id();
                 $houla_id   = get_post_meta( $product_id, '_wphoula_product_id', true );
                 $ws_info    = $this->resolve_workspace_for_product( $product );
+                $in_scope   = $this->should_sync_product( $product );
+                if ( ! $in_scope && ! $houla_id ) {
+                    $skipped++;
+                    continue;
+                }
                 $data       = $this->format_product_for_workspace( $product, $ws_info );
+                if ( ! $in_scope ) {
+                    $data['status'] = 'draft';
+                }
                 $overrides  = $ws_info ? $ws_info['overrides'] : array();
 
                 if ( $houla_id ) {
@@ -953,6 +1001,42 @@ class Wp_Houla_Sync {
         return is_string( $brand ) ? substr( $brand, 0, 70 ) : '';
     }
 
+    /**
+     * Convert a WooCommerce weight (store unit) to kilograms, as a string.
+     *
+     * The Hou.la API has always read `weight` as kilograms; WooCommerce sends it
+     * in the store unit (woocommerce_weight_unit: kg, g, lbs or oz). Real case
+     * (2026-11-08, « Les Perles de Jo », unit g): 75 g arrived as 75 kg.
+     *
+     * A kg store gets its value back UNCHANGED (same string): the API hashes the
+     * raw value to detect content changes, so a reformatted "0.50" -> "0.5"
+     * would re-open moderation for every product of every kg store.
+     *
+     * @param string|float $weight Weight in the store unit ('' = none).
+     * @param string       $unit   woocommerce_weight_unit.
+     * @return string Weight in kg ('' when there is none).
+     */
+    public static function weight_to_kg( $weight, $unit ) {
+        if ( null === $weight || '' === trim( (string) $weight ) ) {
+            return '';
+        }
+        $unit = strtolower( trim( (string) $unit ) );
+        if ( 'kg' === $unit || '' === $unit ) {
+            return (string) $weight;
+        }
+        $factors = array(
+            'g'   => 0.001,
+            'lbs' => 0.45359237,
+            'lb'  => 0.45359237,
+            'oz'  => 0.028349523125,
+        );
+        if ( ! isset( $factors[ $unit ] ) ) {
+            return (string) $weight; // Unknown unit: as before (read as kg).
+        }
+        $kg = (float) str_replace( ',', '.', (string) $weight ) * $factors[ $unit ];
+        return rtrim( rtrim( number_format( $kg, 6, '.', '' ), '0' ), '.' );
+    }
+
     private function format_product( $product ) {
         $data = array(
             'external_id'     => (string) $product->get_id(),
@@ -969,7 +1053,10 @@ class Wp_Houla_Sync {
             'manage_stock'    => $product->get_manage_stock(),
             'sku'             => $product->get_sku(),
             'brand'           => $this->get_product_brand( $product ),
-            'weight'          => $product->get_weight(),
+            // Hou.la reads the weight in KILOGRAMS: converted from the store
+            // unit (75 g used to arrive as 75 kg), see weight_to_kg.
+            'weight'          => self::weight_to_kg( $product->get_weight(), get_option( 'woocommerce_weight_unit' ) ),
+            'weight_unit'     => 'kg',
             'type'            => $product->get_type(),
             'virtual'         => $product->is_virtual(),
             'downloadable'    => $product->is_downloadable(),
@@ -1856,32 +1943,66 @@ class Wp_Houla_Sync {
     }
 
     /**
-     * Check if a specific product should be synced based on category filters.
+     * Positive integer IDs stored under an option (categories or products).
      *
-     * The filter decides which products ENTER Hou.la. A product already on
-     * Hou.la (it has a _wphoula_product_id) is always kept up to date, even if
-     * it no longer matches the filter: otherwise it stays on sale on Hou.la with
-     * frozen data (title, price, description), and nothing tells the seller.
-     * Real case (2026-10-07, giamory.com #43452): a product moved from
-     * "Bijoux dorés" to "Bijoux argentés" stopped syncing for three days.
+     * @param string $key Option key.
+     * @return int[]
+     */
+    private function get_id_option( $key ) {
+        $value = $this->options->get( $key );
+        if ( ! is_array( $value ) ) {
+            return array();
+        }
+        return array_values( array_filter( array_map( 'absint', $value ) ) );
+    }
+
+    /**
+     * Is a sync filter set (categories and/or individually chosen products)?
      *
-     * A product matches when one of its categories, or one of their parents,
-     * is in the filter: the same rule as the batch query (wc_get_products
-     * 'category' includes child categories).
+     * @return bool
+     */
+    private function has_sync_filter() {
+        return ! empty( $this->get_id_option( 'sync_categories' ) ) || ! empty( $this->get_id_option( 'sync_products' ) );
+    }
+
+    /**
+     * Is the product inside the sync filter?
+     *
+     * The filter is the UNION of the chosen categories and the products chosen
+     * one by one; no filter at all = every product. A product matches a
+     * category when one of its categories, or one of their parents, is in the
+     * filter: the same rule as the batch query (wc_get_products 'category'
+     * includes child categories).
+     *
+     * The filter decides what is ON SALE on Hou.la, not only what enters it.
+     * Until 1.6.7 a product already on Hou.la (it has a _wphoula_product_id)
+     * always passed: once a first sync had sent the whole catalogue (sync
+     * launched before the filter was saved, or the 6-hourly cron of a fresh
+     * install), ticking categories afterwards changed nothing, every product
+     * stayed. Real case (2026-11-08, « Les Perles de Jo », ~600 products,
+     * 2 categories ticked, the whole catalogue on Hou.la). A linked product
+     * outside the filter is now sent as a DRAFT: taken offline, never deleted,
+     * and back online if it returns to the filter. Its data stays fresh, so the
+     * 2026-10-07 giamory.com case (#43452, frozen on sale for three days after
+     * a category change) does not come back.
      *
      * @param int|WC_Product $product Product ID or object.
      * @return bool
      */
     private function should_sync_product( $product ) {
-        $sync_categories = $this->options->get( 'sync_categories' );
-        if ( empty( $sync_categories ) || ! is_array( $sync_categories ) ) {
+        $sync_categories = $this->get_id_option( 'sync_categories' );
+        $sync_products   = $this->get_id_option( 'sync_products' );
+        if ( empty( $sync_categories ) && empty( $sync_products ) ) {
             return true; // No filter = sync everything
         }
 
-        $product_id = is_object( $product ) ? $product->get_id() : $product;
+        $product_id = absint( is_object( $product ) ? $product->get_id() : $product );
 
-        if ( get_post_meta( $product_id, '_wphoula_product_id', true ) ) {
-            return true; // Already on Hou.la = keep it in sync
+        if ( in_array( $product_id, $sync_products, true ) ) {
+            return true;
+        }
+        if ( empty( $sync_categories ) ) {
+            return false;
         }
 
         $product_cats = wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'ids' ) );
@@ -1895,7 +2016,7 @@ class Wp_Houla_Sync {
             $with_parents = array_merge( $with_parents, get_ancestors( $cat_id, 'product_cat', 'taxonomy' ) );
         }
 
-        return ! empty( array_intersect( array_map( 'absint', $with_parents ), array_map( 'absint', $sync_categories ) ) );
+        return ! empty( array_intersect( array_map( 'absint', $with_parents ), $sync_categories ) );
     }
 
     /**
