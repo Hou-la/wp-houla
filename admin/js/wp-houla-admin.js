@@ -263,10 +263,10 @@
     // Save settings
     // =================================================================
 
-    $(document).on('click', '#wphoula-save-settings, .wphoula-save-settings-btn', function () {
-        var $btn = $(this);
-        $btn.prop('disabled', true);
-
+    /**
+     * Save every setting of the page. Returns the jqXHR.
+     */
+    function saveSettings() {
         var postTypes = [];
         $('.wphoula-post-type:checked').each(function () {
             postTypes.push($(this).val());
@@ -275,6 +275,11 @@
         var syncCategories = [];
         $('.wphoula-sync-category:checked').each(function () {
             syncCategories.push($(this).val());
+        });
+
+        var syncProducts = [];
+        $('.wphoula-sync-product:checked').each(function () {
+            syncProducts.push($(this).val());
         });
 
         // Category -> Collection mapping
@@ -299,6 +304,7 @@
             sync_tracking: $('#wphoula-sync-tracking').is(':checked') ? 1 : 0,
             'allowed_post_types[]': postTypes,
             'sync_categories[]': syncCategories,
+            'sync_products[]': syncProducts,
         };
 
         // Add category_collection_map as nested keys
@@ -322,7 +328,14 @@
             data['identifier_meta_map[' + idKey + ']'] = metaKey || '';
         });
 
-        $.post(ajaxUrl, data, function (response) {
+        return $.post(ajaxUrl, data);
+    }
+
+    $(document).on('click', '#wphoula-save-settings, .wphoula-save-settings-btn', function () {
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+
+        saveSettings().done(function (response) {
             $btn.prop('disabled', false);
             if (response.success) {
                 // Brief visual feedback
@@ -334,6 +347,65 @@
         }).fail(function () {
             $btn.prop('disabled', false);
         });
+    });
+
+    // =================================================================
+    // Sync filter: products chosen one by one (search + checkboxes)
+    // =================================================================
+
+    var productSearchTimer = null;
+
+    $(document).on('input', '#wphoula-product-search', function () {
+        var term = ($(this).val() || '').trim();
+        var $results = $('#wphoula-product-search-results');
+        clearTimeout(productSearchTimer);
+        if (term.length < 2) {
+            $results.hide().empty();
+            return;
+        }
+        productSearchTimer = setTimeout(function () {
+            $.post(ajaxUrl, { action: 'wphoula_search_products', nonce: nonce, term: term }, function (resp) {
+                $results.empty();
+                var items = (resp && resp.success && resp.data) ? resp.data : [];
+                if (!items.length) {
+                    $results.append($('<p class="description">').text(i18n.noProductFound || 'No product found.'));
+                }
+                $.each(items, function (i, p) {
+                    var already = $('.wphoula-sync-product[value="' + p.id + '"]').length > 0;
+                    var $label = $('<label style="display:block;margin-bottom:4px;">');
+                    var $cb = $('<input type="checkbox" class="wphoula-product-search-pick">').val(p.id).data('name', p.name).data('sku', p.sku);
+                    if (already) {
+                        $cb.prop('checked', true).prop('disabled', true);
+                    }
+                    $label.append($cb).append(' ').append(document.createTextNode(p.name));
+                    if (p.sku) {
+                        $label.append(' ').append($('<span class="description">').text('(' + p.sku + ')'));
+                    }
+                    $results.append($label);
+                });
+                $results.show();
+            });
+        }, 300);
+    });
+
+    // Picking a search result adds it, checked, to the chosen products.
+    $(document).on('change', '.wphoula-product-search-pick', function () {
+        var $cb = $(this);
+        if (!$cb.is(':checked')) {
+            return;
+        }
+        var id = $cb.val();
+        if (!$('.wphoula-sync-product[value="' + id + '"]').length) {
+            var $label = $('<label style="display:block;margin-bottom:4px;">');
+            $label.append($('<input type="checkbox" class="wphoula-sync-product" checked>').val(id))
+                .append(' ').append(document.createTextNode($cb.data('name')));
+            if ($cb.data('sku')) {
+                $label.append(' ').append($('<span class="description">').text('(' + $cb.data('sku') + ')'));
+            }
+            $('#wphoula-sync-products-list').prepend($label);
+        }
+        $('.wphoula-sync-products-empty').hide();
+        $cb.prop('disabled', true);
     });
 
     // =================================================================
@@ -388,11 +460,18 @@
         $btn.prop('disabled', true);
         $spinner.show().text(i18n.syncing || 'Lancement de la synchronisation...');
 
-        // Start background sync
-        $.post(ajaxUrl, {
-            action: 'wphoula_start_background_sync',
-            nonce: nonce
-        }, function (resp) {
+        // Save the settings FIRST: the sync reads the SAVED filter. Ticking
+        // categories then clicking Sync without Save synced the whole
+        // catalogue (2026-11-08, ~600 products, 2 categories ticked).
+        saveSettings().then(function (saved) {
+            if (!saved || !saved.success) {
+                return $.Deferred().reject().promise();
+            }
+            return $.post(ajaxUrl, {
+                action: 'wphoula_start_background_sync',
+                nonce: nonce
+            });
+        }).done(function (resp) {
             if (!resp.success) {
                 $btn.prop('disabled', false);
                 $spinner.text(i18n.syncError || 'Erreur lors du lancement');

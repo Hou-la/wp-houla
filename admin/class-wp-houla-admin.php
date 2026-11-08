@@ -76,6 +76,7 @@ class Wp_Houla_Admin {
                     'disconnect'  => __( 'Disconnect', 'wp-houla' ),
                     'disconnecting' => __( 'Disconnecting...', 'wp-houla' ),
                     'saveSettings'  => __( 'Save Settings', 'wp-houla' ),
+                    'noProductFound' => __( 'No product found.', 'wp-houla' ),
                     'creatingCollections' => __( 'Creating collections...', 'wp-houla' ),
                     'collectionsCreated'  => __( ' collections created, ', 'wp-houla' ),
                     'collectionsMapped'   => __( ' mapped.', 'wp-houla' ),
@@ -639,6 +640,12 @@ class Wp_Houla_Admin {
             $sync_categories = array_map( 'absint', $_POST['sync_categories'] );
         }
 
+        // Products chosen one by one (union with the categories)
+        $sync_products = array();
+        if ( isset( $_POST['sync_products'] ) && is_array( $_POST['sync_products'] ) ) {
+            $sync_products = array_values( array_unique( array_filter( array_map( 'absint', $_POST['sync_products'] ) ) ) );
+        }
+
         // Custom API URL (only accepted in dev mode)
         $api_url = '';
         if ( isset( $_POST['api_url'] ) && function_exists( 'wphoula_is_dev_mode' ) && wphoula_is_dev_mode() ) {
@@ -706,6 +713,7 @@ class Wp_Houla_Admin {
             'debug'                  => $debug,
             'allowed_post_types'     => $allowed_post_types,
             'sync_categories'        => $sync_categories,
+            'sync_products'          => $sync_products,
             'api_url'                => $api_url,
             'price_adjustment_type'  => $price_adj_type,
             'price_adjustment_value' => $price_adj_value,
@@ -716,6 +724,39 @@ class Wp_Houla_Admin {
         ) );
 
         wp_send_json_success( array( 'message' => __( 'Settings saved.', 'wp-houla' ) ) );
+    }
+
+    /**
+     * AJAX: search products for the "products one by one" sync filter.
+     * Same search as the WooCommerce admin (title, SKU), published products only.
+     */
+    public function ajax_search_products() {
+        check_ajax_referer( 'wphoula_admin', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
+
+        $term = isset( $_POST['term'] ) ? sanitize_text_field( wp_unslash( $_POST['term'] ) ) : '';
+        if ( strlen( $term ) < 2 || ! class_exists( 'WC_Data_Store' ) ) {
+            wp_send_json_success( array() );
+        }
+
+        $ids     = WC_Data_Store::load( 'product' )->search_products( $term, '', false, false, 30 );
+        $results = array();
+        foreach ( array_filter( array_map( 'absint', (array) $ids ) ) as $id ) {
+            $product = wc_get_product( $id );
+            if ( ! $product || 'publish' !== $product->get_status() || $product->is_type( 'variation' ) ) {
+                continue;
+            }
+            $results[] = array(
+                'id'   => $id,
+                'name' => wp_strip_all_tags( $product->get_name() ),
+                'sku'  => (string) $product->get_sku(),
+            );
+        }
+
+        wp_send_json_success( $results );
     }
 
     // =====================================================================

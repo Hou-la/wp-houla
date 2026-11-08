@@ -618,7 +618,38 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
                                 <p class="description"><?php esc_html_e( 'No WooCommerce categories found.', 'wp-houla' ); ?></p>
                             <?php endif; ?>
                             <p class="description"><?php esc_html_e( 'Select which categories to sync. Leave all unchecked to sync all products.', 'wp-houla' ); ?></p>
-                            <p class="description"><?php esc_html_e( 'Products already on Hou.la stay up to date, even if they leave these categories.', 'wp-houla' ); ?></p>
+                            <p class="description"><?php esc_html_e( 'A product that leaves the filter is taken offline on Hou.la (never deleted), and comes back online if it returns.', 'wp-houla' ); ?></p>
+                        </fieldset>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e( 'Products chosen one by one', 'wp-houla' ); ?></th>
+                    <td>
+                        <fieldset>
+                            <legend class="screen-reader-text"><?php esc_html_e( 'Products chosen one by one', 'wp-houla' ); ?></legend>
+                            <input type="search" id="wphoula-product-search" class="regular-text" autocomplete="off" placeholder="<?php esc_attr_e( 'Search a product (name or SKU)...', 'wp-houla' ); ?>">
+                            <div id="wphoula-product-search-results" class="wphoula-scroll-container" style="display:none; max-height: 200px; overflow-y: auto; border: 1px solid #c3c4c7; border-radius: 4px; padding: 8px 12px; margin-top: 6px;"></div>
+                            <div id="wphoula-sync-products-list" class="wphoula-scroll-container" style="max-height: 300px; overflow-y: auto; border: 1px solid #c3c4c7; border-radius: 4px; padding: 8px 12px; margin-top: 8px;">
+                            <?php
+                            $sync_products = $options->get( 'sync_products' );
+                            $sync_products = is_array( $sync_products ) ? array_filter( array_map( 'absint', $sync_products ) ) : array();
+                            $shown         = 0;
+                            foreach ( $sync_products as $sp_id ) :
+                                $sp = wc_get_product( $sp_id );
+                                if ( ! $sp ) {
+                                    continue;
+                                }
+                                $shown++;
+                            ?>
+                                <label style="display: block; margin-bottom: 4px;">
+                                    <input type="checkbox" class="wphoula-sync-product" value="<?php echo esc_attr( $sp_id ); ?>" checked>
+                                    <?php echo esc_html( $sp->get_name() ); ?>
+                                    <?php if ( $sp->get_sku() ) : ?><span class="description">(<?php echo esc_html( $sp->get_sku() ); ?>)</span><?php endif; ?>
+                                </label>
+                            <?php endforeach; ?>
+                                <p class="description wphoula-sync-products-empty"<?php echo $shown ? ' style="display:none;"' : ''; ?>><?php esc_html_e( 'No product chosen.', 'wp-houla' ); ?></p>
+                            </div>
+                            <p class="description"><?php esc_html_e( 'Synced in addition to the categories above. With no category and no product chosen, the whole catalogue is synced.', 'wp-houla' ); ?></p>
                         </fieldset>
                     </td>
                 </tr>

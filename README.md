@@ -158,7 +158,8 @@ In the **Sync** tab:
 
 - **Auto-sync** (enabled by default) - WooCommerce products are pushed to Hou.la on every change.
 - **Sync on publish** (enabled by default) - newly published products are synced immediately.
-- **Category filter** - select which WooCommerce categories enter Hou.la (child categories included). Leave all unchecked to sync all products. A product already on Hou.la keeps syncing even if it leaves these categories.
+- **Category filter** - select which WooCommerce categories are on sale on Hou.la (child categories included). Leave all unchecked to sync all products. A product that leaves the filter is taken offline on Hou.la (sent as a draft, never deleted) and comes back if it returns.
+- **Products chosen one by one** - search by name or SKU and tick products, in addition to the categories. With no category and no product chosen, the whole catalogue is synced. Clicking "Sync" saves the settings first.
 - **Batch sync** - push the entire catalog in one click (useful after initial installation or import).
 
 ### 3. Orders
@@ -299,7 +300,9 @@ Three modes:
 2. **Manual** - "Sync" and "Remove" buttons in the product metabox.
 3. **Batch** - full catalog sync from settings (products processed in pages of 50).
 
-**Category filtering:** optionally limit which WooCommerce products ENTER Hou.la via the Sync tab (a product matches when one of its categories, or a parent of it, is selected). Products outside the selection are not created on Hou.la. A product already on Hou.la (`_wphoula_product_id`) is always kept up to date, by hooks and batch sync alike, even after it leaves the selection: otherwise it would stay on sale with frozen data (since 2026-10-07, case giamory.com #43452). The product metabox "Re-sync" button ignores the filter and the auto-sync switch, and reports the real API error.
+**Sync filter:** optionally limit which WooCommerce products are ON SALE on Hou.la via the Sync tab: the union of the selected categories (a product matches when one of its categories, or a parent of it, is selected) and of the products chosen one by one (`sync_products`). Products outside the filter are never created on Hou.la. A product already on Hou.la (`_wphoula_product_id`) that leaves the filter is still updated, by hooks and batch sync alike, but sent with `status: draft`: offline, never deleted, data fresh (so the giamory.com #43452 "frozen on sale" case of 2026-10-07 does not come back). Until 1.6.7 such a product always stayed on sale, so ticking categories after a first full sync changed nothing ("Les Perles de Jo", 2026-11-08). The product metabox "Re-sync" button ignores the auto-sync switch, adds the product to `sync_products` when a filter is set, sends `restore_withdrawn: true` (Hou.la then restores a product the seller had deleted or taken offline on Hou.la), and reports the real API error.
+
+**Weight unit:** the weight is sent in kilograms (`weight` + `weight_unit: kg`), converted from `woocommerce_weight_unit` (g, lbs, oz). A kg store sends its raw value unchanged. Until 1.6.7 the store unit was sent as is and read as kg (75 g became 75 kg).
 
 **Synced data:**
 
