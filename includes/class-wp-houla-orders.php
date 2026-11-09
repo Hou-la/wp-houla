@@ -630,6 +630,19 @@ class Wp_Houla_Orders {
         // Determine restock: defaults to true if not specified
         $restock = isset( $data['restock_items'] ) ? (bool) $data['restock_items'] : true;
 
+        // Same refund received twice (Hou.la replays a webhook whose answer
+        // came too late, but which WooCommerce had applied): recorded once.
+        // The order lock serializes two simultaneous copies.
+        $refund_id = isset( $data['refund_id'] ) ? sanitize_text_field( (string) $data['refund_id'] ) : '';
+        if ( '' !== $refund_id && method_exists( $order, 'get_refunds' ) ) {
+            foreach ( $order->get_refunds() as $existing ) {
+                if ( $refund_id === (string) $existing->get_meta( '_houla_refund_id' ) ) {
+                    $this->log( 'Refund ' . $refund_id . ' already recorded on WC #' . $order_id . ': ignored.' );
+                    return array( 'order_id' => $order_id, 'duplicate' => true );
+                }
+            }
+        }
+
         // Create the refund
         $refund = wc_create_refund( array(
             'amount'         => $refund_amount,
@@ -642,6 +655,11 @@ class Wp_Houla_Orders {
         if ( is_wp_error( $refund ) ) {
             $this->log( 'Refund failed for WC #' . $order_id . ': ' . $refund->get_error_message() );
             return $refund;
+        }
+
+        if ( '' !== $refund_id && is_object( $refund ) && method_exists( $refund, 'update_meta_data' ) ) {
+            $refund->update_meta_data( '_houla_refund_id', $refund_id );
+            $refund->save();
         }
 
         // Hou.la puts these items back in ITS stock (restoreStockForOrder) and
@@ -843,6 +861,9 @@ class Wp_Houla_Orders {
     /** @var array<string,int> Hou.la orders whose lock this request holds (re-entrant). */
     private static $held_locks = array();
 
+    /** Seconds a webhook waits for the order lock (Hou.la gives up after 15). */
+    const LOCK_WAIT = 5;
+
     /**
      * Run a webhook handler under a lock per Hou.la order.
      *
@@ -886,7 +907,10 @@ class Wp_Houla_Orders {
         if ( ! is_object( $wpdb ) || ! method_exists( $wpdb, 'get_var' ) ) {
             return true; // No database (unit tests).
         }
-        $got = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $this->lock_name( $key ), 15 ) );
+        // 5 s, bien en dessous des 15 s après lesquelles Hou.la abandonne un
+        // envoi (AbortSignal.timeout) : sinon Hou.la renonçait, ce webhook
+        // s'appliquait quand même, puis Hou.la le renvoyait.
+        $got = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $this->lock_name( $key ), self::LOCK_WAIT ) );
         if ( '1' !== (string) $got ) {
             return false;
         }

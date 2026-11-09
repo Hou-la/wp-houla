@@ -81,6 +81,16 @@ class StockOrder {
     public function set_status( $s, $note = '' ) { $this->status = $s; }
     public function get_status() { return $this->status; }
     public function add_order_note( $n, $customer = 0 ) { $this->notes[] = $n; }
+    public $refunds = array();
+    public function get_refunds() { return $this->refunds; }
+}
+
+/** Remboursement WooCommerce : porte l'id Hou.la du remboursement. */
+class StockRefund {
+    public $meta = array();
+    public function update_meta_data( $k, $v ) { $this->meta[ $k ] = $v; }
+    public function get_meta( $k, $single = true ) { return $this->meta[ $k ] ?? ''; }
+    public function save() {}
 }
 
 class OrderStockTest extends TestCase {
@@ -417,6 +427,83 @@ class OrderStockTest extends TestCase {
         ) );
 
         $this->assertSame( '1', $order->saved_meta[0]['_houla_stock_v2'] ?? null );
+    }
+
+    // ── Relecture de sécurité, tour 2 (2026-11-09) ──────────────────────
+
+    /** Hou.la abandonne un envoi après 15 s : le verrou n'attend que 5 s. */
+    public function test_lock_waits_less_than_hou_la_waits_for_the_answer() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-LOCK-3', '_houla_stock_v2' => '1' );
+        $order->status = 'open-cart';
+        $order->store->reduced = true;
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        $db = $this->fakeDb( '1' );
+        $GLOBALS['wpdb'] = $db;
+
+        ( new \Wp_Houla_Orders() )->update_order_status( array( 'houla_order_id' => 'HL-LOCK-3', 'wc_status' => 'processing' ) );
+        unset( $GLOBALS['wpdb'] );
+
+        // Avant : GET_LOCK(..., 15), autant que le délai de Hou.la.
+        $this->assertMatchesRegularExpression( '/^SELECT GET_LOCK\(\'wphoula_[0-9a-f]+\', 5\)$/', $db->queries[0] );
+    }
+
+    /** Le même remboursement reçu deux fois (relance après délai dépassé) n'est enregistré qu'une fois. */
+    public function test_same_refund_received_twice_is_recorded_once() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-REF-4', '_houla_stock_v2' => '1' );
+        $order->status = 'processing';
+        $order->store->reduced = true;
+        $order->add_product( new StockProduct( 41 ), 2 );
+        $this->item( $order, 41 )->update_meta_data( '_reduced_stock', 2 );
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        Functions\when( 'wc_price' )->returnArg( 1 );
+        $created = 0;
+        Functions\when( 'wc_create_refund' )->alias( function () use ( $order, &$created ) {
+            $created++;
+            $r = new StockRefund();
+            $order->refunds[] = $r;
+            return $r;
+        } );
+        $payload = array(
+            'houla_order_id' => 'HL-REF-4',
+            'refund_id'      => 're_3Px1',
+            'refund_amount'  => 12,
+            'restock_items'  => true,
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 1 ) ),
+        );
+
+        ( new \Wp_Houla_Orders() )->refund_order( $payload );
+        $second = ( new \Wp_Houla_Orders() )->refund_order( $payload );
+
+        // Avant : 2 remboursements WooCommerce et 2 unités remises en stock.
+        $this->assertSame( 1, $created );
+        $this->assertSame( array( array( 41, 1, 'increase' ) ), $this->moves );
+        $this->assertTrue( $second['duplicate'] );
+    }
+
+    /** Contre-témoin : deux remboursements partiels DIFFÉRENTS sont bien enregistrés tous les deux. */
+    public function test_two_different_refunds_are_both_recorded() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-REF-5', '_houla_stock_v2' => '1' );
+        $order->status = 'processing';
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        Functions\when( 'wc_price' )->returnArg( 1 );
+        $created = 0;
+        Functions\when( 'wc_create_refund' )->alias( function () use ( $order, &$created ) {
+            $created++;
+            $r = new StockRefund();
+            $order->refunds[] = $r;
+            return $r;
+        } );
+
+        ( new \Wp_Houla_Orders() )->refund_order( array( 'houla_order_id' => 'HL-REF-5', 'refund_id' => 're_A', 'refund_amount' => 5, 'restock_items' => false ) );
+        ( new \Wp_Houla_Orders() )->refund_order( array( 'houla_order_id' => 'HL-REF-5', 'refund_id' => 're_B', 'refund_amount' => 5, 'restock_items' => false ) );
+
+        $this->assertSame( 2, $created );
     }
 
     public function test_refund_without_restock_moves_nothing() {
