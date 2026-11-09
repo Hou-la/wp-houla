@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.9
+Stable tag: 1.6.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,11 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.10 =
+* UNE COMMANDE HOU.LA EST RATTACHEE A VOTRE CLIENTE QUAND ELLE A DEJA UN COMPTE SUR VOTRE SITE. Jusqu'ici, toute commande venue de Hou.la arrivait en commande « Invite », meme quand l'acheteuse avait deja un compte client avec le meme e-mail : la commande n'apparaissait pas dans son espace « Mon compte », et la liste Clients de WooCommerce affichait une autre fiche, ou remplacait son nom par celui de la commande Hou.la. L'e-mail est compare sans tenir compte des majuscules ni des espaces, et le profil de votre cliente n'est pas modifie.
+* Par securite, une commande n'est jamais rattachee a un compte administrateur, gestionnaire ou redacteur, meme avec le meme e-mail : elle reste une commande invitee, avec une note qui l'explique.
+* Nouvelle acheteuse : aucun compte n'est cree et aucun e-mail de mot de passe n'est envoye, comme avant. Un nouveau reglage, dans l'onglet Commandes, permet de creer un compte client pour les nouvelles acheteuses Hou.la ; WooCommerce leur envoie alors son e-mail de bienvenue. Il est desactive par defaut.
 
 = 1.6.9 =
 * LES PRODUITS QUE VOUS AVEZ SUPPRIMES SUR HOU.LA SONT SIGNALES. Hou.la ne remet plus en ligne un produit que vous avez supprime depuis Hou.la. Jusqu'ici, le module le comptait quand meme comme « synchronise » et affichait un succes : rien ne se passait, sans explication. L'onglet Synchronisation affiche maintenant « N produits ont ete supprimes par vous sur Hou.la et ne sont plus synchronises », avec un bouton « Les remettre sur Hou.la ». Apres confirmation, il renvoie ces produits, seulement ceux de vos categories ou produits choisis.
