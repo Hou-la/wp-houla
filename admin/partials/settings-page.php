@@ -914,6 +914,33 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
             </p>
         </div>
 
+        <!-- ── Clientes : rattachement et compte client (1.6.10) ── -->
+        <div class="wphoula-card" style="margin-top: 20px;">
+            <h2><?php esc_html_e( 'Clientes Hou.la', 'wp-houla' ); ?></h2>
+            <p class="description" style="margin-bottom: 12px;">
+                <?php esc_html_e( 'Une commande Hou.la est rattachée au compte client du site qui a le même e-mail. Un compte administrateur ou gestionnaire n\'est jamais utilisé : la commande reste alors une commande invitée, avec une note.', 'wp-houla' ); ?>
+            </p>
+            <table class="form-table">
+                <tr>
+                    <th><?php esc_html_e( 'Nouvelles acheteuses', 'wp-houla' ); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" id="wphoula-create-customer-account" <?php checked( (bool) $options->get( 'create_customer_account' ) ); ?>>
+                            <?php esc_html_e( 'Créer un compte client pour les nouvelles acheteuses Hou.la (WooCommerce envoie alors son e-mail de bienvenue)', 'wp-houla' ); ?>
+                        </label>
+                        <p class="description" style="margin-top: 8px;">
+                            <?php esc_html_e( 'Désactivé : la commande est une commande invitée, aucun compte n\'est créé et aucun e-mail de mot de passe n\'est envoyé.', 'wp-houla' ); ?>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            <p>
+                <button type="button" class="button button-primary wphoula-save-settings-btn">
+                    <?php esc_html_e( 'Save Settings', 'wp-houla' ); ?>
+                </button>
+            </p>
+        </div>
+
         <!-- ── Tracking auto-sync settings ── -->
         <div class="wphoula-card" style="margin-top: 20px;">
             <h2><?php esc_html_e( 'Tracking Sync', 'wp-houla' ); ?></h2>

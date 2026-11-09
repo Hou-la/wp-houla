@@ -52,6 +52,9 @@ class StockOrder {
     private $next  = 1;
 
     public function get_id() { return 300; }
+    public $customer_id = 0;
+    public function get_customer_id() { return $this->customer_id; }
+    public function set_customer_id( $id ) { $this->customer_id = (int) $id; }
     public function add_product( $product, $qty, $args = array() ) { $this->items[ $this->next++ ] = new \WC_Order_Item_Product( $product, $qty ); }
     public function add_item( $item ) { $this->items[ $this->next++ ] = $item; }
     public function get_items( $types = 'line_item' ) {
@@ -107,6 +110,9 @@ class OrderStockTest extends TestCase {
         Functions\when( 'wp_parse_args' )->alias( function ( $args, $defaults ) { return array_merge( $defaults, $args ); } );
         Functions\when( 'is_wp_error' )->alias( function ( $t ) { return $t instanceof \WP_Error; } );
         Functions\when( 'current_time' )->justReturn( '2026-11-09 21:00:00' );
+        // 1.6.10 : rattachement à la cliente WooCommerce (aucun compte ici).
+        Functions\when( 'is_email' )->alias( function ( $e ) { return false !== filter_var( $e, FILTER_VALIDATE_EMAIL ) ? $e : false; } );
+        Functions\when( 'get_user_by' )->justReturn( false );
         Functions\when( 'wc_get_order_statuses' )->justReturn( array( 'wc-processing' => 'Processing', 'wc-open-cart' => 'Open cart', 'wc-cancelled' => 'Cancelled' ) );
         Functions\when( 'wc_get_product' )->alias( function ( $id ) { return new StockProduct( (int) $id ); } );
         Functions\when( 'wc_update_product_stock' )->alias( function ( $product, $qty, $op ) {

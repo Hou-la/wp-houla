@@ -175,6 +175,11 @@ class Wp_Houla_Orders {
             // create AND update so re-synced/merged orders also carry it.
             $this->apply_service_point( $order, $customer );
 
+            // Cliente déjà connue du site : la commande lui est rattachée
+            // (Trello #146). Création seulement : un compte peut être créé ici
+            // si la vendeuse l'a demandé.
+            $this->attach_customer( $order, $customer, true );
+
             // ----------------------------------------------------------
             // Shipping
             // ----------------------------------------------------------
@@ -509,6 +514,11 @@ class Wp_Houla_Orders {
             // Sendcloud service point (Mondial Relay / locker) metadata — set on BOTH
             // create AND update so re-synced/merged orders also carry it.
             $this->apply_service_point( $order, $customer );
+
+            // Commande invitée dont l'e-mail correspond désormais à un compte
+            // client : rattachée. Jamais de création de compte sur une mise à
+            // jour, et une commande déjà rattachée ne change pas de compte.
+            $this->attach_customer( $order, $customer, false );
 
             // ----------------------------------------------------------
             // Update metadata
@@ -1395,6 +1405,192 @@ class Wp_Houla_Orders {
         if ( ! empty( $sp['method'] ) ) {
             $order->update_meta_data( '_houla_shipping_method', sanitize_text_field( $sp['method'] ) );
         }
+    }
+
+    // =====================================================================
+    // Cliente WooCommerce (Trello #146, 1.6.10)
+    // =====================================================================
+
+    /**
+     * Rattache la commande à la cliente WooCommerce qui a le même e-mail.
+     *
+     * Jusqu'à la 1.6.9, toute commande Hou.la était une commande INVITÉE
+     * (customer_id jamais posé) : même quand l'acheteuse avait déjà un compte
+     * client sur le site, WooCommerce affichait « Invité », la commande
+     * n'apparaissait pas dans « Mon compte », et la liste Clients (Analytics,
+     * table wc_customer_lookup) recevait les coordonnées Hou.la à la place de
+     * son profil, ou une 2e fiche si son compte n'y avait pas encore de ligne
+     * (retour des Perles de Jo, 2026-11-09 ; prouvé sur le banc fsn2).
+     *
+     * Règles :
+     *  - e-mail comparé sans tenir compte de la casse ni des espaces ;
+     *  - compte trouvé et de rôle `customer` (filtre
+     *    `wphoula_linkable_customer_roles`) → rattachée, son profil n'est PAS
+     *    modifié (seule la commande porte les coordonnées Hou.la) ;
+     *  - compte trouvé mais d'un autre rôle (administrateur, gestionnaire,
+     *    auteur…) → JAMAIS rattachée : la commande reste invitée, avec une note
+     *    privée. L'e-mail donné à Hou.la n'est pas toujours prouvé (saisi au
+     *    paiement) : on ne range pas une commande dans un compte qui a des
+     *    droits sur le site ;
+     *  - aucun compte → commande invitée. Analytics la regroupe avec les
+     *    commandes invitées précédentes du même e-mail. Un compte n'est créé
+     *    que si la vendeuse a coché l'option `create_customer_account`, et
+     *    seulement à la CRÉATION de la commande ($allow_create).
+     *
+     * Une commande déjà rattachée ne change jamais de compte.
+     *
+     * @param WC_Order $order
+     * @param array    $customer     Bloc `customer` du webhook.
+     * @param bool     $allow_create Vrai à la création de la commande seulement.
+     */
+    private function attach_customer( $order, $customer, $allow_create ) {
+        if ( (int) $order->get_customer_id() > 0 ) {
+            return;
+        }
+
+        $email = $this->normalize_email( isset( $customer['email'] ) ? $customer['email'] : '' );
+        if ( '' === $email ) {
+            return;
+        }
+
+        $user = get_user_by( 'email', $email );
+        if ( $user ) {
+            if ( $this->is_linkable_customer( $user ) ) {
+                $order->set_customer_id( $user->ID );
+                $this->note_customer_once( $order, 'linked', __( 'Commande rattachée au compte client existant qui a le même e-mail. Son profil n\'a pas été modifié.', 'wp-houla' ) );
+                $this->log( 'Order for Hou.la buyer attached to existing customer #' . $user->ID . '.' );
+            } else {
+                $this->note_customer_once( $order, 'not-a-customer', __( 'Cet e-mail est celui d\'un compte du site qui n\'est pas un compte client (administrateur, gestionnaire…). Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
+                $this->log( 'Hou.la buyer email matches non-customer user #' . $user->ID . ': order kept as guest.' );
+            }
+            return;
+        }
+
+        if ( ! $allow_create || ! $this->options->get( 'create_customer_account' ) ) {
+            return; // Commande invitée : aucun compte, aucun e-mail de mot de passe.
+        }
+
+        $user_id = $this->create_customer_account( $email, $customer );
+        if ( is_wp_error( $user_id ) ) {
+            $this->note_customer_once( $order, 'account-failed', sprintf(
+                /* translators: %s: WooCommerce error message */
+                __( 'Le compte client n\'a pas pu être créé (%s) : la commande reste une commande invitée.', 'wp-houla' ),
+                wp_strip_all_tags( $user_id->get_error_message() )
+            ) );
+            $this->log( 'Customer account creation failed: ' . $user_id->get_error_code() );
+            return;
+        }
+
+        $order->set_customer_id( $user_id );
+        $this->note_customer_once( $order, 'account-created', __( 'Compte client créé pour cette nouvelle acheteuse Hou.la (réglage de l\'extension). WooCommerce lui a envoyé son e-mail de bienvenue.', 'wp-houla' ) );
+        $this->log( 'Customer account #' . $user_id . ' created for a new Hou.la buyer.' );
+    }
+
+    /**
+     * Crée le compte client d'une nouvelle acheteuse (option activée).
+     *
+     * wc_create_new_customer() génère l'identifiant et le mot de passe, puis
+     * déclenche `woocommerce_created_customer` : WooCommerce envoie alors son
+     * e-mail « Nouveau compte » (lien pour choisir le mot de passe), s'il est
+     * activé dans WooCommerce > Réglages > E-mails. Le profil reçoit le prénom
+     * et le nom CIVILS de la commande, jamais le pseudo Hou.la.
+     *
+     * @param string $email    E-mail normalisé.
+     * @param array  $customer Bloc `customer` du webhook.
+     * @return int|WP_Error
+     */
+    private function create_customer_account( $email, $customer ) {
+        if ( ! function_exists( 'wc_create_new_customer' ) ) {
+            return new WP_Error( 'wphoula_no_wc', 'WooCommerce indisponible.' );
+        }
+        $first = $this->safe( $customer, 'first_name' );
+        $last  = $this->safe( $customer, 'last_name' );
+
+        $user_id = wc_create_new_customer( $email, '', '', array(
+            'first_name' => $first,
+            'last_name'  => $last,
+        ) );
+        if ( is_wp_error( $user_id ) ) {
+            return $user_id;
+        }
+
+        // Coordonnées de facturation du profil : uniquement ce que la
+        // cliente a donné pour CETTE commande, pour un compte qui vient de
+        // naître (aucun profil existant n'est jamais réécrit).
+        if ( class_exists( 'WC_Customer' ) ) {
+            try {
+                $wc_customer = new WC_Customer( $user_id );
+                $wc_customer->set_billing_email( $email );
+                $wc_customer->set_billing_first_name( $first );
+                $wc_customer->set_billing_last_name( $last );
+                $wc_customer->save();
+            } catch ( \Exception $e ) {
+                $this->log( 'Customer profile not completed: ' . $e->getMessage() );
+            }
+        }
+
+        return (int) $user_id;
+    }
+
+    /**
+     * Un compte ne reçoit une commande Hou.la que s'il est un simple compte
+     * client : tous ses rôles sont dans la liste autorisée (`customer` par
+     * défaut) et il n'a aucune capacité d'administration ou d'édition. Sur un
+     * multisite, il doit aussi être membre de CE site (un super-administrateur
+     * sans rôle ici est refusé).
+     *
+     * @param WP_User $user
+     * @return bool
+     */
+    private function is_linkable_customer( $user ) {
+        $roles   = array_values( (array) $user->roles );
+        $allowed = (array) apply_filters( 'wphoula_linkable_customer_roles', array( 'customer' ) );
+
+        if ( empty( $roles ) || array_diff( $roles, $allowed ) ) {
+            return false;
+        }
+        foreach ( array( 'manage_options', 'manage_woocommerce', 'edit_shop_orders', 'edit_posts', 'list_users' ) as $cap ) {
+            if ( user_can( $user, $cap ) ) {
+                return false;
+            }
+        }
+        if ( function_exists( 'is_multisite' ) && is_multisite() && ! is_user_member_of_blog( $user->ID ) ) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * E-mail comparable : sans espaces autour, en minuscules, valide.
+     *
+     * @param mixed $raw
+     * @return string '' si absent ou invalide.
+     */
+    private function normalize_email( $raw ) {
+        if ( ! is_string( $raw ) ) {
+            return '';
+        }
+        $email = strtolower( trim( $raw ) );
+        if ( '' === $email || ! is_email( $email ) ) {
+            return '';
+        }
+        return $email;
+    }
+
+    /**
+     * Note privée de rattachement, une seule fois par décision : update_order()
+     * repasse ici à chaque resynchronisation (panier ouvert, relance).
+     *
+     * @param WC_Order $order
+     * @param string   $decision
+     * @param string   $note
+     */
+    private function note_customer_once( $order, $decision, $note ) {
+        if ( $order->get_meta( '_houla_customer_link' ) === $decision ) {
+            return;
+        }
+        $order->update_meta_data( '_houla_customer_link', $decision );
+        $order->add_order_note( $note );
     }
 
     /**

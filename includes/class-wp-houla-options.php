@@ -73,6 +73,9 @@ class Wp_Houla_Options {
             ),
             // Tracking sync
             'sync_tracking'      => true,
+            // Nouvelle acheteuse Hou.la : compte client WooCommerce créé (et e-mail de
+            // bienvenue de WooCommerce envoyé). Désactivé : commande invitée (1.6.10).
+            'create_customer_account' => false,
             // Product identifiers meta mapping (gtin/isbn => WC meta_key)
             'identifier_meta_map' => array(
                 'gtin'  => '',

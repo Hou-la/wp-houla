@@ -31,6 +31,9 @@ class MockWcOrder {
 
     public function get_id() { return $this->id; }
     public function get_total() { return 59.99; }
+    private $customer_id = 0;
+    public function get_customer_id() { return $this->customer_id; }
+    public function set_customer_id( $id ) { $this->customer_id = (int) $id; }
 
     public function add_product( $product, $qty, $args = array() ) {
         $this->items[] = array( 'product' => $product, 'qty' => $qty, 'args' => $args );
@@ -106,6 +109,9 @@ class OrderFlowTest extends TestCase {
             return $thing instanceof \WP_Error;
         } );
         Functions\when( 'current_time' )->justReturn( '2026-02-22 14:30:00' );
+        // 1.6.10 : rattachement à la cliente WooCommerce (aucun compte ici).
+        Functions\when( 'is_email' )->alias( function ( $e ) { return false !== filter_var( $e, FILTER_VALIDATE_EMAIL ) ? $e : false; } );
+        Functions\when( 'get_user_by' )->justReturn( false );
         // create_order() validates the target status against the registered
         // WooCommerce order statuses (array_keys( wc_get_order_statuses() )).
         Functions\when( 'wc_get_order_statuses' )->justReturn( array(

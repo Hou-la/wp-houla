@@ -729,6 +729,9 @@ class Wp_Houla_Admin {
         // Tracking sync
         $sync_tracking = ! empty( $_POST['sync_tracking'] );
 
+        // Compte client pour les nouvelles acheteuses Hou.la (désactivé par défaut).
+        $create_customer_account = ! empty( $_POST['create_customer_account'] );
+
         // Product identifiers meta mapping (gtin/isbn => WC meta_key)
         $identifier_meta_map = array( 'gtin' => '', 'isbn' => '' );
         if ( isset( $_POST['identifier_meta_map'] ) && is_array( $_POST['identifier_meta_map'] ) ) {
@@ -755,6 +758,7 @@ class Wp_Houla_Admin {
             'category_collection_map' => $cat_collection_map,
             'order_status_map'       => $order_status_map,
             'sync_tracking'          => $sync_tracking,
+            'create_customer_account' => $create_customer_account,
             'identifier_meta_map'    => $identifier_meta_map,
         ) );
 
