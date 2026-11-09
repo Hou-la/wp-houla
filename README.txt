@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.7
+Stable tag: 1.6.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,14 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.9 =
+* LES PRODUITS QUE VOUS AVEZ SUPPRIMES SUR HOU.LA SONT SIGNALES. Hou.la ne remet plus en ligne un produit que vous avez supprime depuis Hou.la. Jusqu'ici, le module le comptait quand meme comme « synchronise » et affichait un succes : rien ne se passait, sans explication. L'onglet Synchronisation affiche maintenant « N produits ont ete supprimes par vous sur Hou.la et ne sont plus synchronises », avec un bouton « Les remettre sur Hou.la ». Apres confirmation, il renvoie ces produits, seulement ceux de vos categories ou produits choisis.
+* UNE VENTE SUR HOU.LA NE RETIRE PLUS QU'UNE SEULE UNITE DU STOCK. Une commande payee sur Hou.la, pendant un live par exemple, retirait le stock deux fois dans WooCommerce (une fois par le module, une fois par WooCommerce au passage « En cours »), et le module renvoyait ce stock faux a Hou.la. Le stock est maintenant retire une seule fois, avec la comptabilite de WooCommerce.
+* Panier ouvert (live) : un article ajoute au panier retire bien son stock, et la cloture du panier ne le retire pas une deuxieme fois. Une commande annulee rend exactement ce qui a ete retire. Un remboursement Hou.la remet en stock les articles que Hou.la remet en vente.
+* Le stock de chaque variation (taille, couleur) est envoye a Hou.la des qu'il change dans WooCommerce. Avant, seule la synchronisation complete le mettait a jour.
+* Un reglage enregistre pendant une longue synchronisation (le filtre de categories par exemple) n'est plus annule a la fin de cette synchronisation.
+* Rappel des corrections de la 1.6.7 publiee le 8 novembre, que les boutiques deja en 1.6.7 n'avaient pas recues : le filtre par categories decide des produits en vente sur Hou.la (un produit qui sort du filtre passe hors ligne, sans etre supprime), les poids en grammes, livres ou onces sont convertis (75 g ne devient plus 75 kg), et des produits peuvent etre choisis un par un.
 
 = 1.6.7 =
 * PLUS DE FAUSSE « NOUVELLE COMMANDE » QUAND UN PANIER OUVERT EXPIRE. A l'expiration d'un panier ouvert, Hou.la passe la commande a « En cours » ; l'application WooCommerce prenait ce passage pour une vente neuve et faisait sonner le telephone, alors que la commande etait deja dans votre boutique depuis l'ouverture du panier. Ce passage ne declenche plus de notification. Une commande arrivee directement « En cours » vous est toujours annoncee.
