@@ -86,6 +86,9 @@ class CustomerLinkTest extends TestCase {
     /** @var array réglages enregistrés de l'extension */
     private $settings = array();
 
+    /** @var array méta des comptes, par ID */
+    private $usermeta = array();
+
     /** @var array réglages WooCommerce (get_option) */
     private $wc = array();
 
@@ -103,7 +106,10 @@ class CustomerLinkTest extends TestCase {
             'gestion@exemple.test' => new LinkUser( 3, array( 'shop_manager' ), 'gestion@exemple.test' ),
             'abonnee@exemple.test' => new LinkUser( 4, array( 'subscriber' ), 'abonnee@exemple.test' ),
         );
-        $this->settings = array();
+        // La plupart des tests exercent les défenses de l'option ACTIVE ;
+        // ceux du comportement par défaut la vident.
+        $this->settings = array( 'link_existing_accounts' => true );
+        $this->usermeta = array();
         $this->created  = array();
         $this->members  = array();
         // Site qui prouve l'e-mail : WooCommerce envoie le lien « définir le mot de passe ».
@@ -115,6 +121,7 @@ class CustomerLinkTest extends TestCase {
             }
             return array_key_exists( $name, $this->wc ) ? $this->wc[ $name ] : $default;
         } );
+        Functions\when( 'get_user_meta' )->alias( function ( $id, $key = '', $single = false ) { return $this->usermeta[ $id ][ $key ] ?? ''; } );
         Functions\when( 'is_user_member_of_blog' )->alias( function ( $id ) { return ! empty( $this->members[ $id ] ); } );
         Functions\when( 'update_option' )->justReturn( true );
         Functions\when( 'wp_parse_args' )->alias( function ( $args, $defaults ) { return array_merge( $defaults, (array) $args ); } );
@@ -168,19 +175,19 @@ class CustomerLinkTest extends TestCase {
     }
 
     /** Commande neuve, aucune commande Hou.la existante. */
-    private function create( $email, $status = 'processing' ) {
+    private function create( $email, $status = 'processing', array $extra = array() ) {
         $order = new LinkOrder();
         Functions\when( 'wc_create_order' )->justReturn( $order );
         Functions\when( 'wc_get_orders' )->justReturn( array() );
         Functions\when( 'wc_get_order' )->justReturn( $order );
 
-        $result = ( new \Wp_Houla_Orders() )->create_order( array(
+        $result = ( new \Wp_Houla_Orders() )->create_order( array_merge( array(
             'houla_order_id' => 'HL-146',
             'customer'       => array( 'email' => $email, 'first_name' => 'Josiane', 'last_name' => 'Banc', 'display_name' => 'JoLive' ),
             'items'          => array( array( 'external_id' => '41', 'quantity' => 1, 'price' => 12, 'name' => 'Perle' ) ),
             'total'          => 12,
             'wc_status'      => $status,
-        ) );
+        ), $extra ) );
         $this->assertSame( 500, $result['order_id'] );
         return $order;
     }
@@ -191,7 +198,7 @@ class CustomerLinkTest extends TestCase {
         // Avant (1.6.9) : customer_id restait à 0, commande « Invité ».
         $this->assertSame( 12, $order->customer_id );
         $this->assertSame( 'linked', $order->meta['_houla_customer_link'] );
-        $this->assertStringContainsString( 'rattachée au compte client existant', implode( "\n", $order->notes ) );
+        $this->assertStringContainsString( 'rattachée au compte client qui a le même e-mail', implode( "\n", $order->notes ) );
         $this->assertSame( array(), $this->created, 'aucun compte créé' );
         // La commande garde les coordonnées Hou.la ; le profil n'est jamais écrit (pas de WC_Customer ici).
         $this->assertSame( 'Jo@Exemple.TEST', $order->billing['email'] );
@@ -240,7 +247,7 @@ class CustomerLinkTest extends TestCase {
     }
 
     public function test_option_on_creates_a_customer_account_for_a_new_buyer() {
-        $this->settings = array( 'create_customer_account' => true );
+        $this->settings['create_customer_account'] = true;
         $order = $this->create( ' Nouvelle@Exemple.test' );
 
         $this->assertCount( 1, $this->created );
@@ -257,7 +264,7 @@ class CustomerLinkTest extends TestCase {
     }
 
     public function test_option_on_never_creates_an_account_when_one_exists() {
-        $this->settings = array( 'create_customer_account' => true );
+        $this->settings['create_customer_account'] = true;
         $order = $this->create( 'jo@exemple.test' );
 
         $this->assertSame( array(), $this->created );
@@ -265,7 +272,7 @@ class CustomerLinkTest extends TestCase {
     }
 
     public function test_option_on_but_account_refused_keeps_a_guest_order() {
-        $this->settings = array( 'create_customer_account' => true );
+        $this->settings['create_customer_account'] = true;
         Functions\when( 'wc_create_new_customer' )->justReturn( new \WP_Error( 'registration-error', 'Captcha manquant' ) );
         $order = $this->create( 'nouvelle@exemple.test' );
 
@@ -283,7 +290,7 @@ class CustomerLinkTest extends TestCase {
 
     /** Resynchronisation (panier ouvert, relance) : rattache une commande invitée, une seule note, aucun compte créé. */
     public function test_update_attaches_a_guest_order_once_and_never_creates_an_account() {
-        $this->settings = array( 'create_customer_account' => true );
+        $this->settings['create_customer_account'] = true;
         $order = new LinkOrder();
         $order->meta = array( '_houla_order_id' => 'HL-146', '_houla_stock_v2' => '1' );
         $order->status = 'open-cart';
@@ -330,38 +337,98 @@ class CustomerLinkTest extends TestCase {
     // ouvert après la commande, détachement.
     // ─────────────────────────────────────────────────────────────────
 
-    /** Les clientes choisissent leur mot de passe : un tiers a pu s'inscrire avec cet e-mail. */
-    public function test_site_that_does_not_verify_emails_never_attaches_by_default() {
-        $this->wc['woocommerce_registration_generate_password'] = 'no';
+    /** Rattachement désactivé par défaut : WooCommerce ne prouve pas l'e-mail d'un compte. */
+    public function test_existing_account_is_not_attached_by_default() {
+        $this->settings = array();
         $order = $this->create( 'jo@exemple.test' );
 
         $this->assertSame( 0, $order->customer_id );
-        $this->assertSame( 'unverified', $order->meta['_houla_customer_link'] );
-        $this->assertStringContainsString( 'ne vérifie pas l\'e-mail', implode( "\n", $order->notes ) );
+        $this->assertSame( 'option-off', $order->meta['_houla_customer_link'] );
+        $this->assertStringContainsString( 'rattachement automatique est désactivé', implode( "\n", $order->notes ) );
     }
 
-    public function test_missing_woocommerce_setting_counts_as_not_verified() {
-        $this->wc = array();
+    public function test_woocommerce_password_link_setting_does_not_enable_attachment() {
+        // « Lien pour définir le mot de passe » coché : l'inscription connecte
+        // quand même aussitôt (banc fsn2, chemin A). Aucune garantie.
+        $this->settings = array();
+        $this->wc['woocommerce_registration_generate_password'] = 'yes';
         $order = $this->create( 'jo@exemple.test' );
 
         $this->assertSame( 0, $order->customer_id );
-        $this->assertSame( 'unverified', $order->meta['_houla_customer_link'] );
     }
 
-    public function test_seller_can_accept_unverified_accounts_explicitly() {
-        $this->wc['woocommerce_registration_generate_password'] = 'no';
-        $this->settings = array( 'link_unverified_accounts' => true );
+    public function test_option_off_never_touches_admin_accounts_either() {
+        $this->settings = array();
+        $order = $this->create( 'gerante@exemple.test' );
+
+        $this->assertSame( 0, $order->customer_id );
+    }
+
+    /** Option active : un compte dont l'e-mail a changé après sa création est refusé (chemin B). */
+    public function test_account_whose_email_was_changed_is_never_attached() {
+        $this->usermeta[12]['_wphoula_email_changed_at'] = 1762700000;
         $order = $this->create( 'jo@exemple.test' );
+
+        $this->assertSame( 0, $order->customer_id );
+        $this->assertSame( 'email-changed', $order->meta['_houla_customer_link'] );
+    }
+
+    public function test_profile_update_flags_an_email_change_only() {
+        $flags = array();
+        Functions\when( 'update_user_meta' )->alias( function ( $id, $key, $value ) use ( &$flags ) { $flags[] = array( $id, $key ); return true; } );
+        $now = new LinkUser( 12, array( 'customer' ), 'autre@exemple.test' );
+        Functions\when( 'get_userdata' )->justReturn( $now );
+
+        \Wp_Houla_Orders::flag_email_change( 12, new LinkUser( 12, array( 'customer' ), ' AUTRE@exemple.test ' ) ); // même adresse
+        $this->assertSame( array(), $flags );
+
+        \Wp_Houla_Orders::flag_email_change( 12, new LinkUser( 12, array( 'customer' ), 'jo@exemple.test' ) );
+        $this->assertSame( array( array( 12, '_wphoula_email_changed_at' ) ), $flags );
+    }
+
+    /** Création : référence = la plus ancienne entre paid_at et la création (resynchronisation d'une vieille commande). */
+    public function test_creation_never_attaches_to_an_account_opened_after_payment() {
+        $this->users['jo@exemple.test']->user_registered = '2026-06-01 10:00:00';
+        $order = $this->create( 'jo@exemple.test', 'processing', array( 'paid_at' => '2026-05-20T14:30:00Z' ) );
+
+        $this->assertSame( 0, $order->customer_id );
+        $this->assertSame( 'account-too-recent', $order->meta['_houla_customer_link'] );
+    }
+
+    public function test_creation_attaches_when_the_account_predates_payment() {
+        $this->users['jo@exemple.test']->user_registered = '2026-05-01 10:00:00';
+        $order = $this->create( 'jo@exemple.test', 'processing', array( 'paid_at' => '2026-05-20T14:30:00Z' ) );
 
         $this->assertSame( 12, $order->customer_id );
-        $this->assertSame( 'linked', $order->meta['_houla_customer_link'] );
     }
 
-    public function test_site_verification_follows_the_woocommerce_setting() {
-        $this->wc['woocommerce_registration_generate_password'] = 'yes';
-        $this->assertTrue( \Wp_Houla_Orders::site_verifies_email() );
-        $this->wc['woocommerce_registration_generate_password'] = 'no';
-        $this->assertFalse( \Wp_Houla_Orders::site_verifies_email() );
+    /** Repli de update_order() vers create_order() (commande absente) : même contrôle. */
+    public function test_update_falling_back_to_creation_checks_the_payment_date() {
+        $this->users['jo@exemple.test']->user_registered = '2026-06-01 10:00:00';
+        $order = new LinkOrder();
+        Functions\when( 'wc_create_order' )->justReturn( $order );
+        Functions\when( 'wc_get_orders' )->justReturn( array() );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+
+        ( new \Wp_Houla_Orders() )->update_order( array(
+            'houla_order_id' => 'HL-146',
+            'paid_at'        => '2026-05-20T14:30:00Z',
+            'customer'       => array( 'email' => 'jo@exemple.test' ),
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 1, 'price' => 12 ) ),
+        ) );
+
+        $this->assertSame( 0, $order->customer_id );
+        $this->assertSame( 'account-too-recent', $order->meta['_houla_customer_link'] );
+    }
+
+    /** Date d'inscription nulle, vide ou à 0000-00-00 : horodatage ≤ 0, compte refusé. */
+    public function test_account_with_a_null_registration_date_is_refused() {
+        foreach ( array( '0000-00-00 00:00:00', '', '1970-01-01 00:00:00' ) as $date ) {
+            $this->users['jo@exemple.test']->user_registered = $date;
+            $order = $this->create( 'jo@exemple.test' );
+            $this->assertSame( 0, $order->customer_id, 'user_registered=' . var_export( $date, true ) );
+            $this->assertSame( 'account-too-recent', $order->meta['_houla_customer_link'] );
+        }
     }
 
     public function test_subscriber_is_never_attached() {

@@ -918,28 +918,21 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
         <div class="wphoula-card" style="margin-top: 20px;">
             <h2><?php esc_html_e( 'Clientes Hou.la', 'wp-houla' ); ?></h2>
             <p class="description" style="margin-bottom: 12px;">
-                <?php esc_html_e( 'Une commande Hou.la est rattachée au compte client du site qui a le même e-mail, si votre site vérifie l\'e-mail à l\'inscription. Un compte administrateur ou gestionnaire n\'est jamais utilisé : la commande reste alors une commande invitée, avec une note.', 'wp-houla' ); ?>
+                <?php esc_html_e( 'Par défaut, une commande Hou.la arrive en commande invitée, avec les coordonnées de l\'acheteuse, même si un compte client de votre site a le même e-mail.', 'wp-houla' ); ?>
             </p>
-            <?php $wphoula_email_verified = Wp_Houla_Orders::site_verifies_email(); ?>
-            <div id="wphoula-email-verification-state" class="notice inline <?php echo $wphoula_email_verified ? 'notice-success' : 'notice-warning'; ?>" style="margin: 0 0 12px;">
-                <p>
-                    <?php if ( $wphoula_email_verified ) : ?>
-                        <?php esc_html_e( 'Votre site vérifie l\'e-mail à l\'inscription : WooCommerce envoie à chaque nouvelle cliente un lien pour choisir son mot de passe. Les commandes Hou.la sont rattachées automatiquement.', 'wp-houla' ); ?>
-                    <?php else : ?>
-                        <?php esc_html_e( 'Votre site ne vérifie pas l\'e-mail à l\'inscription : les clientes choisissent leur mot de passe, donc n\'importe qui peut ouvrir un compte avec l\'e-mail d\'une autre personne. Les commandes Hou.la ne sont pas rattachées. Pour les rattacher en toute sécurité, cochez « Envoyer un lien à la nouvelle cliente pour définir son mot de passe » dans WooCommerce > Réglages > Comptes et confidentialité.', 'wp-houla' ); ?>
-                    <?php endif; ?>
-                </p>
-            </div>
             <table class="form-table">
                 <tr>
-                    <th><?php esc_html_e( 'Sans vérification de l\'e-mail', 'wp-houla' ); ?></th>
+                    <th><?php esc_html_e( 'Clientes déjà inscrites', 'wp-houla' ); ?></th>
                     <td>
                         <label>
-                            <input type="checkbox" id="wphoula-link-unverified-accounts" <?php checked( (bool) $options->get( 'link_unverified_accounts' ) ); ?>>
-                            <?php esc_html_e( 'Rattacher aussi quand les clientes choisissent leur mot de passe à l\'inscription', 'wp-houla' ); ?>
+                            <input type="checkbox" id="wphoula-link-existing-accounts" <?php checked( (bool) $options->get( 'link_existing_accounts' ) ); ?>>
+                            <?php esc_html_e( 'Rattacher les commandes Hou.la au compte client qui a le même e-mail', 'wp-houla' ); ?>
                         </label>
                         <p class="description" style="margin-top: 8px; color: #b32d2e;">
-                            <?php esc_html_e( 'Déconseillé. Une personne qui ouvre un compte sur votre site avec l\'e-mail d\'une acheteuse verrait dans « Mon compte » ses commandes Hou.la : adresse, téléphone et articles. Laissez décoché sauf si vous contrôlez vous-même chaque inscription.', 'wp-houla' ); ?>
+                            <?php esc_html_e( 'Risque à connaître avant de cocher : WooCommerce ne vérifie pas l\'e-mail d\'un compte. Une personne peut s\'inscrire sur votre site avec l\'e-mail d\'une autre (elle est connectée aussitôt, sans ouvrir aucun e-mail), changer l\'e-mail de son compte dans « Mon compte » sans confirmation, ou passer par une extension de connexion sociale. Elle verrait alors dans « Mon compte » les commandes Hou.la rattachées : adresse, téléphone et articles.', 'wp-houla' ); ?>
+                        </p>
+                        <p class="description" style="margin-top: 8px;">
+                            <?php esc_html_e( 'Protections appliquées quand la case est cochée : seulement un compte client (jamais un administrateur ou un gestionnaire), ouvert avant la commande, dont l\'e-mail n\'a pas été modifié depuis l\'installation de cette version. Si l\'e-mail d\'une commande change, elle redevient invitée.', 'wp-houla' ); ?>
                         </p>
                     </td>
                 </tr>

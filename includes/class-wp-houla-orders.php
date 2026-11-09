@@ -178,7 +178,7 @@ class Wp_Houla_Orders {
             // Cliente déjà connue du site : la commande lui est rattachée
             // (Trello #146). Création seulement : un compte peut être créé ici
             // si la vendeuse l'a demandé.
-            $this->attach_customer( $order, $customer, true );
+            $this->attach_customer( $order, $customer, true, isset( $data['paid_at'] ) ? (string) $data['paid_at'] : '' );
 
             // ----------------------------------------------------------
             // Shipping
@@ -518,7 +518,7 @@ class Wp_Houla_Orders {
             // Commande invitée dont l'e-mail correspond désormais à un compte
             // client : rattachée. Jamais de création de compte sur une mise à
             // jour, et une commande déjà rattachée ne change pas de compte.
-            $this->attach_customer( $order, $customer, false );
+            $this->attach_customer( $order, $customer, false, isset( $data['paid_at'] ) ? (string) $data['paid_at'] : '' );
 
             // ----------------------------------------------------------
             // Update metadata
@@ -1412,42 +1412,46 @@ class Wp_Houla_Orders {
     // =====================================================================
 
     /**
-     * Rattache la commande à la cliente WooCommerce qui a le même e-mail.
+     * Rattache la commande à la cliente WooCommerce qui a le même e-mail,
+     * si la vendeuse l'a activé (`link_existing_accounts`, DÉSACTIVÉ par défaut).
      *
      * Jusqu'à la 1.6.9, toute commande Hou.la était une commande INVITÉE
-     * (customer_id jamais posé) : même quand l'acheteuse avait déjà un compte
-     * client sur le site, WooCommerce affichait « Invité », la commande
+     * (customer_id jamais posé) : WooCommerce affichait « Invité », la commande
      * n'apparaissait pas dans « Mon compte », et la liste Clients (Analytics,
-     * table wc_customer_lookup) recevait les coordonnées Hou.la à la place de
-     * son profil, ou une 2e fiche si son compte n'y avait pas encore de ligne
-     * (retour des Perles de Jo, 2026-11-09 ; prouvé sur le banc fsn2).
+     * wc_customer_lookup) recevait les coordonnées Hou.la à la place du profil
+     * de la cliente, ou une 2e fiche (retour des Perles de Jo, 2026-11-09).
      *
-     * Règles :
-     *  - e-mail comparé sans tenir compte de la casse ni des espaces ;
-     *  - compte trouvé et simple compte client (is_linkable_customer) →
-     *    rattachée SEULEMENT si le site prouve l'e-mail des comptes
-     *    (site_verifies_email) ou si la vendeuse a coché
-     *    `link_unverified_accounts`. Sans preuve, un tiers peut s'inscrire
-     *    avec l'e-mail d'une acheteuse et lire ensuite, dans « Mon compte »,
-     *    l'adresse, le téléphone et les articles de ses commandes Hou.la
-     *    (relecture de sécurité du 2026-11-09). Le profil n'est jamais modifié ;
-     *  - à une MISE À JOUR, le compte doit être plus ancien que la commande :
-     *    un compte ouvert après coup avec cet e-mail ne récupère pas une
-     *    commande déjà passée ;
-     *  - compte d'un autre rôle (administrateur, gestionnaire, abonné…) ou avec
-     *    une capacité d'administration → JAMAIS rattachée, note privée ;
-     *  - aucun compte → commande invitée (Analytics la regroupe par e-mail).
-     *    Un compte n'est créé que si la vendeuse a coché
-     *    `create_customer_account`, et seulement à la CRÉATION ($allow_create).
+     * ⚠️ WooCommerce ne prouve PAS l'e-mail d'un compte (banc fsn2, 2026-11-10,
+     * relecture de sécurité) : l'inscription « Mon compte » connecte la personne
+     * aussitôt, même quand le mot de passe est généré et envoyé par e-mail
+     * (WC_Form_Handler::process_registration → wc_set_customer_auth_cookie) ;
+     * « Détails du compte » change l'e-mail sans confirmation ; les extensions
+     * de connexion sociale créent des comptes à partir d'e-mails non vérifiés.
+     * Un tiers qui a un compte au nom de l'e-mail d'une acheteuse lirait donc
+     * dans « Mon compte » l'adresse, le téléphone et les articles de ses
+     * commandes Hou.la rattachées. D'où un réglage à activer en connaissance
+     * de cause, et ces défenses quand il est actif :
+     *  - simple compte client seulement (is_linkable_customer) ;
+     *  - compte ouvert AVANT la commande : date la plus ancienne entre
+     *    `paid_at` (charge utile) et la création de la commande WooCommerce,
+     *    à la création comme à la mise à jour (resynchronisation, repli de
+     *    update_order vers create_order) ; une date d'inscription vide ou nulle
+     *    est refusée ;
+     *  - compte dont l'e-mail a été modifié après sa création refusé
+     *    (méta posée par flag_email_change, crochet profile_update : seuls les
+     *    changements faits APRÈS l'installation de la 1.6.10 sont connus) ;
+     *  - détachement si l'e-mail de la commande ne correspond plus au compte.
+     * Le profil de la cliente n'est jamais modifié.
      *
-     * Une commande déjà rattachée ne change pas de compte, sauf détachement
-     * (detach_if_email_changed) quand son e-mail de facturation change.
+     * Aucun compte : commande invitée. Un compte n'est créé que si la vendeuse
+     * a coché `create_customer_account`, et seulement à la CRÉATION.
      *
      * @param WC_Order $order
      * @param array    $customer     Bloc `customer` du webhook.
      * @param bool     $allow_create Vrai à la création de la commande seulement.
+     * @param string   $paid_at      `paid_at` de la charge utile ('' si absent).
      */
-    private function attach_customer( $order, $customer, $allow_create ) {
+    private function attach_customer( $order, $customer, $allow_create, $paid_at = '' ) {
         $email = $this->normalize_email( isset( $customer['email'] ) ? $customer['email'] : '' );
 
         if ( ! $allow_create ) {
@@ -1459,23 +1463,27 @@ class Wp_Houla_Orders {
 
         $user = get_user_by( 'email', $email );
         if ( $user ) {
+            if ( ! $this->options->get( 'link_existing_accounts' ) ) {
+                $this->note_customer_once( $order, 'option-off', __( 'Un compte client du site a le même e-mail. La commande n\'y est pas rattachée : le rattachement automatique est désactivé dans les réglages de l\'extension (onglet Commandes).', 'wp-houla' ) );
+                return;
+            }
             if ( ! $this->is_linkable_customer( $user ) ) {
                 $this->note_customer_once( $order, 'not-a-customer', __( 'Cet e-mail est celui d\'un compte du site qui n\'est pas un compte client (administrateur, gestionnaire…). Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
                 $this->log( 'Hou.la buyer email matches non-customer user #' . $user->ID . ': order kept as guest.' );
                 return;
             }
-            if ( ! self::site_verifies_email() && ! $this->options->get( 'link_unverified_accounts' ) ) {
-                $this->note_customer_once( $order, 'unverified', __( 'Un compte client a le même e-mail, mais votre site ne vérifie pas l\'e-mail à l\'inscription (les clientes choisissent leur mot de passe). Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée. Voir le réglage « Clientes Hou.la » de l\'extension.', 'wp-houla' ) );
-                $this->log( 'Hou.la buyer email matches customer #' . $user->ID . ' but the site does not verify emails: order kept as guest.' );
+            if ( get_user_meta( $user->ID, '_wphoula_email_changed_at', true ) ) {
+                $this->note_customer_once( $order, 'email-changed', __( 'Un compte client a le même e-mail, mais cet e-mail a été modifié après la création du compte. Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
+                $this->log( 'Customer #' . $user->ID . ' changed its email: not attached.' );
                 return;
             }
-            if ( ! $allow_create && ! $this->registered_before_order( $user, $order ) ) {
-                $this->note_customer_once( $order, 'account-too-recent', __( 'Un compte client a le même e-mail, mais il a été ouvert après cette commande. Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
+            if ( ! $this->registered_before_order( $user, $order, $paid_at ) ) {
+                $this->note_customer_once( $order, 'account-too-recent', __( 'Un compte client a le même e-mail, mais il a été ouvert après cette commande (ou sa date d\'ouverture est inconnue). Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
                 $this->log( 'Customer #' . $user->ID . ' registered after the order: not attached.' );
                 return;
             }
             $order->set_customer_id( $user->ID );
-            $this->note_customer_once( $order, 'linked', __( 'Commande rattachée au compte client existant qui a le même e-mail. Son profil n\'a pas été modifié.', 'wp-houla' ) );
+            $this->note_customer_once( $order, 'linked', __( 'Commande rattachée au compte client qui a le même e-mail (réglage de l\'extension). Son profil n\'a pas été modifié.', 'wp-houla' ) );
             $this->log( 'Order for Hou.la buyer attached to existing customer #' . $user->ID . '.' );
             return;
         }
@@ -1501,34 +1509,59 @@ class Wp_Houla_Orders {
     }
 
     /**
-     * Le site prouve-t-il l'e-mail de ses comptes ? Oui quand WooCommerce
-     * génère le mot de passe à l'inscription (« envoyer un lien pour définir
-     * le mot de passe ») : le compte n'est utilisable qu'avec le lien reçu à
-     * cette adresse. Si les clientes choisissent leur mot de passe, n'importe
-     * qui peut ouvrir un compte avec l'e-mail d'une autre. Option absente :
-     * non prouvé.
+     * Crochet `profile_update` : retient qu'un compte a changé d'e-mail
+     * (« Détails du compte », profil WordPress, REST…), pour ne plus jamais
+     * lui rattacher de commande Hou.la. Ne voit que les changements faits
+     * après l'installation de l'extension en 1.6.10.
      *
-     * @return bool
+     * @param int     $user_id
+     * @param WP_User $old_user_data Compte AVANT la modification.
      */
-    public static function site_verifies_email() {
-        return 'yes' === get_option( 'woocommerce_registration_generate_password', 'no' );
+    public static function flag_email_change( $user_id, $old_user_data = null ) {
+        if ( ! is_object( $old_user_data ) || ! isset( $old_user_data->user_email ) ) {
+            return;
+        }
+        $user = get_userdata( $user_id );
+        if ( ! $user ) {
+            return;
+        }
+        if ( strtolower( trim( (string) $old_user_data->user_email ) ) !== strtolower( trim( (string) $user->user_email ) ) ) {
+            update_user_meta( $user_id, '_wphoula_email_changed_at', time() );
+        }
     }
 
     /**
-     * Le compte a-t-il été ouvert avant la création de la commande ?
-     * `user_registered` est en UTC. Sans date connue : non.
+     * Le compte a-t-il été ouvert avant la commande ? Référence : la date la
+     * plus ancienne entre `paid_at` (Hou.la) et la création de la commande
+     * WooCommerce. `user_registered` est en UTC ; vide, nul ou à
+     * « 0000-00-00 » (horodatage ≤ 0) : refusé.
      *
      * @param WP_User  $user
      * @param WC_Order $order
+     * @param string   $paid_at
      * @return bool
      */
-    private function registered_before_order( $user, $order ) {
-        $created = method_exists( $order, 'get_date_created' ) ? $order->get_date_created() : null;
-        $reg     = ! empty( $user->user_registered ) ? strtotime( $user->user_registered . ' UTC' ) : false;
-        if ( ! $created || ! $reg ) {
+    private function registered_before_order( $user, $order, $paid_at = '' ) {
+        $reg = ! empty( $user->user_registered ) ? strtotime( $user->user_registered . ' UTC' ) : false;
+        if ( false === $reg || $reg <= 0 ) {
             return false;
         }
-        return $reg < $created->getTimestamp();
+
+        $refs    = array();
+        $created = method_exists( $order, 'get_date_created' ) ? $order->get_date_created() : null;
+        if ( $created ) {
+            $refs[] = (int) $created->getTimestamp();
+        }
+        if ( is_string( $paid_at ) && '' !== $paid_at ) {
+            $paid = strtotime( $paid_at );
+            if ( false !== $paid && $paid > 0 ) {
+                $refs[] = $paid;
+            }
+        }
+        if ( empty( $refs ) ) {
+            return false;
+        }
+        return $reg < min( $refs );
     }
 
     /**

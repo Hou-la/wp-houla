@@ -29,6 +29,7 @@ class Wp_Houla {
         $this->define_admin_hooks();
         $this->define_shortlink_hooks();
         $this->define_rest_routes();
+        $this->define_customer_hooks();
 
         // WooCommerce features only when WooCommerce is active
         if ( wphoula_is_woocommerce_active() ) {
@@ -222,6 +223,15 @@ class Wp_Houla {
     // =====================================================================
     // WooCommerce product sync hooks
     // =====================================================================
+
+    /**
+     * Changement d'e-mail d'un compte : retenu pour ne plus jamais lui
+     * rattacher de commande Hou.la (1.6.10, Wp_Houla_Orders::flag_email_change).
+     * Toujours enregistré, même sans WooCommerce actif.
+     */
+    private function define_customer_hooks() {
+        add_action( 'profile_update', array( 'Wp_Houla_Orders', 'flag_email_change' ), 10, 2 );
+    }
 
     private function define_woocommerce_hooks() {
         $sync = new Wp_Houla_Sync();
