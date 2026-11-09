@@ -1424,45 +1424,59 @@ class Wp_Houla_Orders {
      *
      * Règles :
      *  - e-mail comparé sans tenir compte de la casse ni des espaces ;
-     *  - compte trouvé et de rôle `customer` (filtre
-     *    `wphoula_linkable_customer_roles`) → rattachée, son profil n'est PAS
-     *    modifié (seule la commande porte les coordonnées Hou.la) ;
-     *  - compte trouvé mais d'un autre rôle (administrateur, gestionnaire,
-     *    auteur…) → JAMAIS rattachée : la commande reste invitée, avec une note
-     *    privée. L'e-mail donné à Hou.la n'est pas toujours prouvé (saisi au
-     *    paiement) : on ne range pas une commande dans un compte qui a des
-     *    droits sur le site ;
-     *  - aucun compte → commande invitée. Analytics la regroupe avec les
-     *    commandes invitées précédentes du même e-mail. Un compte n'est créé
-     *    que si la vendeuse a coché l'option `create_customer_account`, et
-     *    seulement à la CRÉATION de la commande ($allow_create).
+     *  - compte trouvé et simple compte client (is_linkable_customer) →
+     *    rattachée SEULEMENT si le site prouve l'e-mail des comptes
+     *    (site_verifies_email) ou si la vendeuse a coché
+     *    `link_unverified_accounts`. Sans preuve, un tiers peut s'inscrire
+     *    avec l'e-mail d'une acheteuse et lire ensuite, dans « Mon compte »,
+     *    l'adresse, le téléphone et les articles de ses commandes Hou.la
+     *    (relecture de sécurité du 2026-11-09). Le profil n'est jamais modifié ;
+     *  - à une MISE À JOUR, le compte doit être plus ancien que la commande :
+     *    un compte ouvert après coup avec cet e-mail ne récupère pas une
+     *    commande déjà passée ;
+     *  - compte d'un autre rôle (administrateur, gestionnaire, abonné…) ou avec
+     *    une capacité d'administration → JAMAIS rattachée, note privée ;
+     *  - aucun compte → commande invitée (Analytics la regroupe par e-mail).
+     *    Un compte n'est créé que si la vendeuse a coché
+     *    `create_customer_account`, et seulement à la CRÉATION ($allow_create).
      *
-     * Une commande déjà rattachée ne change jamais de compte.
+     * Une commande déjà rattachée ne change pas de compte, sauf détachement
+     * (detach_if_email_changed) quand son e-mail de facturation change.
      *
      * @param WC_Order $order
      * @param array    $customer     Bloc `customer` du webhook.
      * @param bool     $allow_create Vrai à la création de la commande seulement.
      */
     private function attach_customer( $order, $customer, $allow_create ) {
-        if ( (int) $order->get_customer_id() > 0 ) {
-            return;
-        }
-
         $email = $this->normalize_email( isset( $customer['email'] ) ? $customer['email'] : '' );
-        if ( '' === $email ) {
+
+        if ( ! $allow_create ) {
+            $this->detach_if_email_changed( $order, $email );
+        }
+        if ( (int) $order->get_customer_id() > 0 || '' === $email ) {
             return;
         }
 
         $user = get_user_by( 'email', $email );
         if ( $user ) {
-            if ( $this->is_linkable_customer( $user ) ) {
-                $order->set_customer_id( $user->ID );
-                $this->note_customer_once( $order, 'linked', __( 'Commande rattachée au compte client existant qui a le même e-mail. Son profil n\'a pas été modifié.', 'wp-houla' ) );
-                $this->log( 'Order for Hou.la buyer attached to existing customer #' . $user->ID . '.' );
-            } else {
+            if ( ! $this->is_linkable_customer( $user ) ) {
                 $this->note_customer_once( $order, 'not-a-customer', __( 'Cet e-mail est celui d\'un compte du site qui n\'est pas un compte client (administrateur, gestionnaire…). Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
                 $this->log( 'Hou.la buyer email matches non-customer user #' . $user->ID . ': order kept as guest.' );
+                return;
             }
+            if ( ! self::site_verifies_email() && ! $this->options->get( 'link_unverified_accounts' ) ) {
+                $this->note_customer_once( $order, 'unverified', __( 'Un compte client a le même e-mail, mais votre site ne vérifie pas l\'e-mail à l\'inscription (les clientes choisissent leur mot de passe). Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée. Voir le réglage « Clientes Hou.la » de l\'extension.', 'wp-houla' ) );
+                $this->log( 'Hou.la buyer email matches customer #' . $user->ID . ' but the site does not verify emails: order kept as guest.' );
+                return;
+            }
+            if ( ! $allow_create && ! $this->registered_before_order( $user, $order ) ) {
+                $this->note_customer_once( $order, 'account-too-recent', __( 'Un compte client a le même e-mail, mais il a été ouvert après cette commande. Par sécurité, la commande n\'y est pas rattachée : elle reste une commande invitée.', 'wp-houla' ) );
+                $this->log( 'Customer #' . $user->ID . ' registered after the order: not attached.' );
+                return;
+            }
+            $order->set_customer_id( $user->ID );
+            $this->note_customer_once( $order, 'linked', __( 'Commande rattachée au compte client existant qui a le même e-mail. Son profil n\'a pas été modifié.', 'wp-houla' ) );
+            $this->log( 'Order for Hou.la buyer attached to existing customer #' . $user->ID . '.' );
             return;
         }
 
@@ -1484,6 +1498,60 @@ class Wp_Houla_Orders {
         $order->set_customer_id( $user_id );
         $this->note_customer_once( $order, 'account-created', __( 'Compte client créé pour cette nouvelle acheteuse Hou.la (réglage de l\'extension). WooCommerce lui a envoyé son e-mail de bienvenue.', 'wp-houla' ) );
         $this->log( 'Customer account #' . $user_id . ' created for a new Hou.la buyer.' );
+    }
+
+    /**
+     * Le site prouve-t-il l'e-mail de ses comptes ? Oui quand WooCommerce
+     * génère le mot de passe à l'inscription (« envoyer un lien pour définir
+     * le mot de passe ») : le compte n'est utilisable qu'avec le lien reçu à
+     * cette adresse. Si les clientes choisissent leur mot de passe, n'importe
+     * qui peut ouvrir un compte avec l'e-mail d'une autre. Option absente :
+     * non prouvé.
+     *
+     * @return bool
+     */
+    public static function site_verifies_email() {
+        return 'yes' === get_option( 'woocommerce_registration_generate_password', 'no' );
+    }
+
+    /**
+     * Le compte a-t-il été ouvert avant la création de la commande ?
+     * `user_registered` est en UTC. Sans date connue : non.
+     *
+     * @param WP_User  $user
+     * @param WC_Order $order
+     * @return bool
+     */
+    private function registered_before_order( $user, $order ) {
+        $created = method_exists( $order, 'get_date_created' ) ? $order->get_date_created() : null;
+        $reg     = ! empty( $user->user_registered ) ? strtotime( $user->user_registered . ' UTC' ) : false;
+        if ( ! $created || ! $reg ) {
+            return false;
+        }
+        return $reg < $created->getTimestamp();
+    }
+
+    /**
+     * Détache une commande que l'extension avait rattachée (à un compte
+     * existant ou créé par elle) quand son e-mail de facturation ne correspond
+     * plus à ce compte : la commande redevient invitée, avec une note. Une
+     * commande rattachée à la main par la vendeuse n'est jamais touchée.
+     *
+     * @param WC_Order $order
+     * @param string   $email E-mail normalisé reçu de Hou.la ('' si absent).
+     */
+    private function detach_if_email_changed( $order, $email ) {
+        $user_id = (int) $order->get_customer_id();
+        if ( $user_id <= 0 || ! in_array( $order->get_meta( '_houla_customer_link' ), array( 'linked', 'account-created' ), true ) ) {
+            return;
+        }
+        $user = get_user_by( 'id', $user_id );
+        if ( $user && '' !== $email && $this->normalize_email( $user->user_email ) === $email ) {
+            return;
+        }
+        $order->set_customer_id( 0 );
+        $this->note_customer_once( $order, 'unlinked', __( 'L\'e-mail de la commande ne correspond plus au compte client auquel elle était rattachée : la commande redevient une commande invitée.', 'wp-houla' ) );
+        $this->log( 'Order detached from customer #' . $user_id . ' (email changed).' );
     }
 
     /**
@@ -1549,7 +1617,7 @@ class Wp_Houla_Orders {
         if ( empty( $roles ) || array_diff( $roles, $allowed ) ) {
             return false;
         }
-        foreach ( array( 'manage_options', 'manage_woocommerce', 'edit_shop_orders', 'edit_posts', 'list_users' ) as $cap ) {
+        foreach ( array( 'manage_options', 'manage_woocommerce', 'edit_shop_orders', 'edit_posts', 'list_users', 'edit_users', 'create_users', 'promote_users', 'delete_users' ) as $cap ) {
             if ( user_can( $user, $cap ) ) {
                 return false;
             }

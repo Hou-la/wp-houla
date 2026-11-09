@@ -731,6 +731,7 @@ class Wp_Houla_Admin {
 
         // Compte client pour les nouvelles acheteuses Hou.la (désactivé par défaut).
         $create_customer_account = ! empty( $_POST['create_customer_account'] );
+        $link_unverified_accounts = ! empty( $_POST['link_unverified_accounts'] );
 
         // Product identifiers meta mapping (gtin/isbn => WC meta_key)
         $identifier_meta_map = array( 'gtin' => '', 'isbn' => '' );
@@ -759,6 +760,7 @@ class Wp_Houla_Admin {
             'order_status_map'       => $order_status_map,
             'sync_tracking'          => $sync_tracking,
             'create_customer_account' => $create_customer_account,
+            'link_unverified_accounts' => $link_unverified_accounts,
             'identifier_meta_map'    => $identifier_meta_map,
         ) );
 

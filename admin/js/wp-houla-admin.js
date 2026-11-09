@@ -303,6 +303,7 @@
             price_adjustment_value: $('#wphoula-price-adj-value').val() || 0,
             sync_tracking: $('#wphoula-sync-tracking').is(':checked') ? 1 : 0,
             create_customer_account: $('#wphoula-create-customer-account').is(':checked') ? 1 : 0,
+            link_unverified_accounts: $('#wphoula-link-unverified-accounts').is(':checked') ? 1 : 0,
             'allowed_post_types[]': postTypes,
             'sync_categories[]': syncCategories,
             'sync_products[]': syncProducts,

@@ -76,6 +76,10 @@ class Wp_Houla_Options {
             // Nouvelle acheteuse Hou.la : compte client WooCommerce créé (et e-mail de
             // bienvenue de WooCommerce envoyé). Désactivé : commande invitée (1.6.10).
             'create_customer_account' => false,
+            // Rattacher une commande Hou.la au compte client du même e-mail même si
+            // le site laisse les clientes choisir leur mot de passe (e-mail non
+            // prouvé, risque de lecture par un tiers). Désactivé (1.6.10).
+            'link_unverified_accounts' => false,
             // Product identifiers meta mapping (gtin/isbn => WC meta_key)
             'identifier_meta_map' => array(
                 'gtin'  => '',
