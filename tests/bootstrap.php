@@ -113,11 +113,13 @@ if ( ! class_exists( 'WC_Order_Item_Product' ) ) {
     class WC_Order_Item_Product {
         private $product;
         private $qty;
+        private $parent;
         private $meta = array();
-        public function __construct( $product = null, $qty = 1 ) { $this->product = $product; $this->qty = $qty; }
+        /** $parent_id : produit parent quand $product est une VARIATION (0 sinon). */
+        public function __construct( $product = null, $qty = 1, $parent_id = 0 ) { $this->product = $product; $this->qty = $qty; $this->parent = $parent_id; }
         public function get_product() { return $this->product; }
-        public function get_product_id() { return $this->product ? $this->product->get_id() : 0; }
-        public function get_variation_id() { return 0; }
+        public function get_product_id() { return $this->parent ? $this->parent : ( $this->product ? $this->product->get_id() : 0 ); }
+        public function get_variation_id() { return $this->parent && $this->product ? $this->product->get_id() : 0; }
         public function get_quantity() { return $this->qty; }
         public function get_meta( $key, $single = true ) { return $this->meta[ $key ] ?? ''; }
         public function update_meta_data( $key, $value ) { $this->meta[ $key ] = $value; }

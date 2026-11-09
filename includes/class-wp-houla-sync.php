@@ -739,14 +739,17 @@ class Wp_Houla_Sync {
      * products the seller deleted on Hou.la. Only those INSIDE the sync filter:
      * a product she left out of the filter must not come back on sale.
      *
-     * Processes one chunk per call (the admin page calls again while
-     * `remaining` > 0), so 600 products never hit the PHP time limit.
+     * Processes one chunk per call, so 600 products never hit the PHP time
+     * limit. The admin page calls again with `next_offset` while `has_more`:
+     * a product Hou.la refuses (or an error) stays in the list, and the next
+     * call moves PAST it instead of sending the same 20 products again.
      *
-     * @param int $limit Products per call.
-     * @return array { restored, still_withdrawn, errors, remaining, skipped_out_of_filter }
+     * @param int $limit  Products per call.
+     * @param int $offset Products of the list already tried and still there.
+     * @return array { restored, still_withdrawn, errors, remaining, skipped_out_of_filter, next_offset, has_more, stop }
      */
-    public function restore_withdrawn_products( $limit = 20 ) {
-        $out = array( 'restored' => 0, 'still_withdrawn' => 0, 'errors' => 0, 'remaining' => 0, 'skipped_out_of_filter' => 0 );
+    public function restore_withdrawn_products( $limit = 20, $offset = 0 ) {
+        $out = array( 'restored' => 0, 'still_withdrawn' => 0, 'errors' => 0, 'remaining' => 0, 'skipped_out_of_filter' => 0, 'next_offset' => 0, 'has_more' => false, 'stop' => false );
         if ( ! $this->auth->is_connected() ) {
             $out['error_message'] = 'Not connected';
             return $out;
@@ -760,7 +763,9 @@ class Wp_Houla_Sync {
                 $out['skipped_out_of_filter']++;
             }
         }
-        $chunk = array_slice( $ids, 0, max( 1, absint( $limit ) ) );
+        $offset = min( absint( $offset ), count( $ids ) );
+        $chunk  = array_slice( $ids, $offset, max( 1, absint( $limit ) ) );
+        $gone   = 0; // Products deleted from WooCommerce meanwhile: leave the list.
 
         // One batch call per workspace (multi-workspace routing).
         $groups = array();
@@ -768,6 +773,7 @@ class Wp_Houla_Sync {
             $product = wc_get_product( $id );
             if ( ! $product ) {
                 delete_post_meta( $id, '_wphoula_withdrawn' );
+                $gone++;
                 continue;
             }
             $ws_info = $this->resolve_workspace_for_product( $product );
@@ -788,6 +794,7 @@ class Wp_Houla_Sync {
             if ( is_wp_error( $result ) ) {
                 $out['errors']       += count( $group['ids'] );
                 $out['error_message'] = $result->get_error_message();
+                $out['stop']          = true; // Hou.la unreachable: no point going on.
                 $this->log( 'Restore withdrawn products failed: ' . $result->get_error_message() );
                 continue;
             }
@@ -812,9 +819,11 @@ class Wp_Houla_Sync {
         }
         self::$syncing = false;
 
-        // What is left to send (a refused or failed product would loop
-        // forever: the page stops when nothing was restored in a round).
-        $out['remaining'] = max( 0, count( $ids ) - $out['restored'] );
+        // Restored or gone products left the list; the others stay, so the
+        // next call starts after them.
+        $out['remaining']   = max( 0, count( $ids ) - $out['restored'] - $gone );
+        $out['next_offset'] = $offset + count( $chunk ) - $out['restored'] - $gone;
+        $out['has_more']    = $offset + count( $chunk ) < count( $ids );
         $this->log( 'Restore withdrawn: ' . $out['restored'] . ' restored, ' . $out['remaining'] . ' remaining, ' . $out['errors'] . ' errors.' );
         return $out;
     }

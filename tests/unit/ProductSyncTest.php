@@ -626,6 +626,44 @@ class ProductSyncTest extends TestCase {
         $this->assertSame( 1, $this->meta[1201]['_wphoula_withdrawn'] );
     }
 
+    /**
+     * Relecture du 2026-11-09 : un lot de 20 entièrement refusé arrêtait la
+     * remise en ligne, et la page renvoyait toujours les 20 MÊMES produits.
+     */
+    public function test_restore_moves_past_a_refused_chunk_to_the_next_products() {
+        $sync = $this->makeSync( array(), true, function ( $m, $e ) {
+            return array( 'details' => array_map( function ( $p ) {
+                return '1201' === $p['external_id'] || '1202' === $p['external_id']
+                    ? array( 'external_id' => $p['external_id'], 'id' => 'h' . $p['external_id'], 'withdrawn' => true )
+                    : array( 'external_id' => $p['external_id'], 'id' => 'h' . $p['external_id'] );
+            }, end( $this->payloads )['products'] ) );
+        } );
+        foreach ( array( 1201, 1202, 1203 ) as $id ) {
+            $this->meta[ $id ] = array( '_wphoula_product_id' => 'h' . $id, '_wphoula_withdrawn' => 1 );
+        }
+        Functions\when( 'get_posts' )->alias( function () {
+            return array_values( array_filter( array( 1201, 1202, 1203 ), function ( $id ) {
+                return ! empty( $this->meta[ $id ]['_wphoula_withdrawn'] );
+            } ) );
+        } );
+        Functions\when( 'wc_get_product' )->alias( function ( $id ) {
+            return $this->makeProduct( $id );
+        } );
+
+        $r1 = $sync->restore_withdrawn_products( 2, 0 );
+        $r2 = $sync->restore_withdrawn_products( 2, $r1['next_offset'] );
+
+        $this->assertSame( 0, $r1['restored'] );
+        $this->assertSame( 2, $r1['still_withdrawn'] );
+        $this->assertTrue( $r1['has_more'] );
+        $this->assertSame( 2, $r1['next_offset'] );
+        // 2e appel : APRÈS les deux refusés (avant : les 2 mêmes, puis arrêt).
+        $this->assertSame( array( '1203' ), array_column( $this->payloads[1]['products'], 'external_id' ) );
+        $this->assertSame( 1, $r2['restored'] );
+        $this->assertFalse( $r2['has_more'] );
+        $this->assertSame( 2, $r2['remaining'] );
+    }
+
     // ── Crochets de création (2026-11-09) ───────────────────────────────
 
     public function test_new_product_inside_the_filter_is_created_and_linked() {

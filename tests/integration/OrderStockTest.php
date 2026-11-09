@@ -30,8 +30,21 @@ class StockProduct {
     public function get_formatted_name() { return 'Produit #' . $this->id; }
 }
 
+/** Drapeau « stock déjà retiré » de WooCommerce (get/set_stock_reduced). */
+class StockDataStore {
+    public $reduced = false;
+    public function get_stock_reduced( $id ) { return $this->reduced; }
+    public function set_stock_reduced( $id, $value ) { $this->reduced = (bool) $value; }
+}
+
 /** Commande dont les lignes sont de vraies lignes produit (WC_Order_Item_Product). */
 class StockOrder {
+    public $store;
+    /** @var array[] méta de la commande au moment de chaque save() */
+    public $saved_meta = array();
+    public function __construct() { $this->store = new StockDataStore(); }
+    public function get_data_store() { return $this->store; }
+    public function add_variation( $variation_id, $parent_id, $qty ) { $this->items[ $this->next++ ] = new \WC_Order_Item_Product( new StockProduct( $variation_id ), $qty, $parent_id ); }
     public $meta   = array();
     public $items  = array();
     public $status = '';
@@ -52,7 +65,7 @@ class StockOrder {
     public function delete_meta_data( $k ) { unset( $this->meta[ $k ] ); }
     public function get_meta( $k = '', $single = true ) { return $this->meta[ $k ] ?? ''; }
     public function save_meta_data() {}
-    public function save() {}
+    public function save() { $this->saved_meta[] = $this->meta; }
     public function set_address( $d, $t ) {}
     public function set_billing_first_name( $n ) {}
     public function get_billing_first_name() { return ''; }
@@ -123,6 +136,8 @@ class OrderStockTest extends TestCase {
     public function test_item_added_to_an_open_cart_takes_only_its_own_stock() {
         $order = new StockOrder();
         $order->meta = array( '_houla_order_id' => 'HL-CART-1', '_houla_stock_v2' => '1' );
+        $order->status = 'open-cart';
+        $order->store->reduced = true;
         $order->add_product( new StockProduct( 41 ), 1 );
         $this->item( $order, 41 )->update_meta_data( '_reduced_stock', 1 ); // déjà retiré
         Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
@@ -146,6 +161,8 @@ class OrderStockTest extends TestCase {
     public function test_quantity_lowered_or_item_removed_gives_the_units_back() {
         $order = new StockOrder();
         $order->meta = array( '_houla_order_id' => 'HL-CART-2', '_houla_stock_v2' => '1' );
+        $order->status = 'open-cart';
+        $order->store->reduced = true;
         $order->add_product( new StockProduct( 41 ), 3 );
         $order->add_product( new StockProduct( 42 ), 1 );
         $this->item( $order, 41 )->update_meta_data( '_reduced_stock', 3 );
@@ -169,6 +186,7 @@ class OrderStockTest extends TestCase {
     public function test_order_created_before_1_6_9_is_not_reduced_twice() {
         $order = new StockOrder();
         $order->meta = array( '_houla_order_id' => 'HL-OLD-1' );
+        $order->status = 'open-cart';
         $order->add_product( new StockProduct( 41 ), 1 );
         Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
         Functions\when( 'wc_get_order' )->justReturn( $order );
@@ -201,6 +219,204 @@ class OrderStockTest extends TestCase {
         // Avant : wc_create_refund() sans lignes ne remettait rien en stock.
         $this->assertSame( array( array( 41, 1, 'increase' ) ), $this->moves );
         $this->assertSame( 1, $this->item( $order, 41 )->get_meta( '_reduced_stock' ) );
+    }
+
+    // ── Relecture de sécurité du 2026-11-09 ─────────────────────────────
+
+    /**
+     * Commande annulée : WooCommerce a rendu le stock (`_reduced_stock`
+     * effacé, drapeau à faux). Un order.paid relancé par Hou.la
+     * (retryFailedOrderWebhooks, resyncFailedOrders) avec wc_status
+     * « cancelled » repasse par update_order : il ne doit RIEN retirer.
+     */
+    public function test_replayed_webhook_of_a_cancelled_order_takes_nothing() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-ANN-1', '_houla_stock_v2' => '1' );
+        $order->status = 'cancelled';
+        $order->add_product( new StockProduct( 41 ), 2 ); // rendu : plus de _reduced_stock
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+
+        ( new \Wp_Houla_Orders() )->create_order( array(
+            'houla_order_id' => 'HL-ANN-1',
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 2, 'price' => 12 ) ),
+            'wc_status'      => 'cancelled',
+        ) );
+
+        // Avant : wc_update_product_stock(41, 2, 'decrease'), jamais rendu.
+        $this->assertSame( array(), $this->moves );
+    }
+
+    public function test_order_arriving_cancelled_is_never_reduced() {
+        $order = new StockOrder();
+        Functions\when( 'wc_create_order' )->justReturn( $order );
+        Functions\when( 'wc_get_orders' )->justReturn( array() );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        Functions\expect( 'wc_reduce_stock_levels' )->never();
+
+        ( new \Wp_Houla_Orders() )->create_order( array(
+            'houla_order_id' => 'HL-ANN-2',
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 1, 'price' => 12 ) ),
+            'wc_status'      => 'cancelled',
+        ) );
+
+        $this->assertSame( array(), $this->moves );
+    }
+
+    public function test_update_that_cancels_the_order_gives_the_stock_back_once() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-ANN-3', '_houla_stock_v2' => '1' );
+        $order->status = 'processing';
+        $order->store->reduced = true;
+        $order->add_product( new StockProduct( 41 ), 2 );
+        $this->item( $order, 41 )->update_meta_data( '_reduced_stock', 2 );
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+
+        ( new \Wp_Houla_Orders() )->update_order( array(
+            'houla_order_id' => 'HL-ANN-3',
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 2, 'price' => 12 ) ),
+            'wc_status'      => 'cancelled',
+        ) );
+
+        // Rendu ici, et drapeau baissé : WooCommerce ne rendra pas une 2e fois.
+        $this->assertSame( array( array( 41, 2, 'increase' ) ), $this->moves );
+        $this->assertFalse( $order->store->reduced );
+        $this->assertSame( 'cancelled', $order->status );
+    }
+
+    public function test_update_after_a_partial_refund_does_not_take_the_refunded_units_again() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-REF-3', '_houla_stock_v2' => '1' );
+        $order->status = 'processing';
+        $order->store->reduced = true;
+        $order->add_product( new StockProduct( 41 ), 2 );
+        $this->item( $order, 41 )->update_meta_data( '_reduced_stock', 1 );          // 1 unité remise en stock
+        $this->item( $order, 41 )->update_meta_data( '_restock_refunded_items', 1 ); // par le remboursement
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+
+        ( new \Wp_Houla_Orders() )->update_order( array(
+            'houla_order_id' => 'HL-REF-3',
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 2, 'price' => 12 ) ),
+        ) );
+
+        $this->assertSame( array(), $this->moves );
+        $this->assertSame( 1, $this->item( $order, 41 )->get_meta( '_reduced_stock' ) );
+    }
+
+    private function variationsOrder( $houla_id ) {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => $houla_id, '_houla_stock_v2' => '1' );
+        $order->status = 'processing';
+        $order->store->reduced = true;
+        $order->add_variation( 1301, 1201, 1 ); // Bleu
+        $order->add_variation( 1302, 1201, 2 ); // Rouge
+        foreach ( $order->get_items( 'line_item' ) as $item ) {
+            $item->update_meta_data( '_reduced_stock', $item->get_quantity() );
+        }
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        Functions\when( 'wc_create_refund' )->justReturn( (object) array( 'id' => 9 ) );
+        Functions\when( 'wc_price' )->returnArg( 1 );
+        return $order;
+    }
+
+    /** API d'avant le 2026-11-09 : l'id du PARENT seul, sans variante. */
+    public function test_refund_naming_only_the_parent_of_several_variations_restocks_nothing() {
+        $this->variationsOrder( 'HL-VAR-1' );
+
+        ( new \Wp_Houla_Orders() )->refund_order( array(
+            'houla_order_id' => 'HL-VAR-1',
+            'refund_amount'  => 36,
+            'restock_items'  => true,
+            'items'          => array( array( 'external_id' => '1201', 'quantity' => 1 ) ),
+        ) );
+
+        // Avant : la 1re ligne trouvée (Bleu) était remise en stock, au hasard.
+        $this->assertSame( array(), $this->moves );
+    }
+
+    public function test_refund_with_the_variant_id_restocks_that_variation() {
+        $this->variationsOrder( 'HL-VAR-2' );
+
+        ( new \Wp_Houla_Orders() )->refund_order( array(
+            'houla_order_id' => 'HL-VAR-2',
+            'refund_amount'  => 24,
+            'restock_items'  => true,
+            'items'          => array( array( 'external_id' => '1201', 'external_variant_id' => '1302', 'quantity' => 2 ) ),
+        ) );
+
+        $this->assertSame( array( array( 1302, 2, 'increase' ) ), $this->moves );
+    }
+
+    private function fakeDb( $lock_answer ) {
+        return new class( $lock_answer ) {
+            public $queries = array();
+            private $answer;
+            public function __construct( $a ) { $this->answer = $a; }
+            public function prepare( $q, ...$a ) { return vsprintf( str_replace( array( '%s', '%d' ), array( "'%s'", '%d' ), $q ), $a ); }
+            public function get_var( $q ) { $this->queries[] = $q; return 0 === strpos( $q, 'SELECT GET_LOCK' ) ? $this->answer : '1'; }
+        };
+    }
+
+    public function test_webhook_is_refused_while_another_one_updates_the_same_order() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-LOCK-1', '_houla_stock_v2' => '1' );
+        $order->status = 'open-cart';
+        $order->store->reduced = true;
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        $GLOBALS['wpdb'] = $this->fakeDb( '0' );
+
+        $r = ( new \Wp_Houla_Orders() )->update_order( array(
+            'houla_order_id' => 'HL-LOCK-1',
+            'items'          => array( array( 'external_id' => '42', 'quantity' => 2, 'price' => 12 ) ),
+        ) );
+        unset( $GLOBALS['wpdb'] );
+
+        // Avant : aucun verrou, le 2e webhook retirait 2 unités de plus.
+        $this->assertInstanceOf( \WP_Error::class, $r );
+        $this->assertSame( 'wphoula_order_busy', $r->get_error_code() );
+        $this->assertSame( array(), $this->moves );
+    }
+
+    public function test_lock_is_taken_and_released_around_the_update() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-LOCK-2', '_houla_stock_v2' => '1' );
+        $order->status = 'open-cart';
+        $order->store->reduced = true;
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        $db = $this->fakeDb( '1' );
+        $GLOBALS['wpdb'] = $db;
+
+        ( new \Wp_Houla_Orders() )->create_order( array( // doublon → update_order : verrou ré-entrant
+            'houla_order_id' => 'HL-LOCK-2',
+            'items'          => array( array( 'external_id' => '42', 'quantity' => 2, 'price' => 12 ) ),
+        ) );
+        unset( $GLOBALS['wpdb'] );
+
+        $this->assertCount( 2, $db->queries );
+        $this->assertStringStartsWith( 'SELECT GET_LOCK', $db->queries[0] );
+        $this->assertStringStartsWith( 'SELECT RELEASE_LOCK', $db->queries[1] );
+        $this->assertSame( array( array( 42, 2, 'decrease' ) ), $this->moves );
+    }
+
+    /** Une commande 1.6.9 interrompue après son 1er save() n'est pas prise pour une ancienne. */
+    public function test_new_order_is_marked_1_6_9_before_its_first_save() {
+        $order = new StockOrder();
+        Functions\when( 'wc_create_order' )->justReturn( $order );
+        Functions\when( 'wc_get_orders' )->justReturn( array() );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+
+        ( new \Wp_Houla_Orders() )->create_order( array(
+            'houla_order_id' => 'HL-V2-1',
+            'items'          => array( array( 'external_id' => '41', 'quantity' => 1, 'price' => 12 ) ),
+            'wc_status'      => 'open-cart',
+        ) );
+
+        $this->assertSame( '1', $order->saved_meta[0]['_houla_stock_v2'] ?? null );
     }
 
     public function test_refund_without_restock_moves_nothing() {

@@ -623,8 +623,10 @@ class Wp_Houla_Admin {
             wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
         }
 
+        $offset = isset( $_POST['offset'] ) ? absint( $_POST['offset'] ) : 0;
+
         $sync = new Wp_Houla_Sync();
-        wp_send_json_success( $sync->restore_withdrawn_products( 20 ) );
+        wp_send_json_success( $sync->restore_withdrawn_products( 20, $offset ) );
     }
 
     /**

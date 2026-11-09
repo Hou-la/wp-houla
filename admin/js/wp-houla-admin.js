@@ -650,11 +650,13 @@
 
         var $status = $('#wphoula-restore-withdrawn-status');
         var restored = 0;
+        var refused = 0;
+        var lastError = '';
         $btn.prop('disabled', true);
         $status.text('Envoi en cours...');
 
-        function round() {
-            $.post(ajaxUrl, { action: 'wphoula_restore_withdrawn', nonce: nonce }, function (resp) {
+        function round(offset) {
+            $.post(ajaxUrl, { action: 'wphoula_restore_withdrawn', nonce: nonce, offset: offset }, function (resp) {
                 if (!resp || !resp.success || !resp.data) {
                     $status.text('Erreur : ' + ((resp && resp.data) ? resp.data : 'réponse invalide'));
                     $btn.prop('disabled', false);
@@ -662,17 +664,18 @@
                 }
                 var d = resp.data;
                 restored += d.restored;
+                refused += d.errors + d.still_withdrawn;
+                if (d.error_message) lastError = d.error_message;
                 $status.text(restored + ' produit' + (restored > 1 ? 's' : '') + ' remis sur Hou.la...');
-                // Continue tant qu'il en reste ET que le tour a avancé : un
-                // produit refusé ou en erreur ne fait pas boucler la page.
-                if (d.remaining > 0 && d.restored > 0) {
-                    round();
+                // Lot suivant : on repart APRÈS les produits refusés ou en
+                // erreur de ce lot (ils restent dans la liste), jusqu'au bout.
+                if (d.has_more && !d.stop) {
+                    round(d.next_offset);
                     return;
                 }
                 var msg = restored + ' produit' + (restored > 1 ? 's' : '') + ' remis sur Hou.la.';
-                if (d.errors > 0 || d.still_withdrawn > 0) {
-                    msg += ' ' + (d.errors + d.still_withdrawn) + ' non remis' +
-                        (d.error_message ? ' (' + d.error_message + ')' : '') + '.';
+                if (refused > 0) {
+                    msg += ' ' + refused + ' non remis' + (lastError ? ' (' + lastError + ')' : '') + '.';
                 }
                 $status.text(msg);
                 $btn.prop('disabled', false);
@@ -683,7 +686,7 @@
                 $btn.prop('disabled', false);
             });
         }
-        round();
+        round(0);
     });
 
     // On page load: check if a background sync is already running
