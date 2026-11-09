@@ -291,8 +291,13 @@ class Wp_Houla_Sync {
         $overrides     = $ws_info ? $ws_info['overrides'] : array();
         $result        = $this->api->post( '/ecommerce/products', $data, $overrides );
 
-        if ( ! is_wp_error( $result ) && isset( $result['id'] ) ) {
+        if ( $this->is_withdrawn( $result ) ) {
+            // Already on Hou.la (same WooCommerce ID), deleted there by the
+            // seller: Hou.la kept it deleted. Not a success (see is_withdrawn).
+            $this->mark_withdrawn( $product_id, $result );
+        } elseif ( ! is_wp_error( $result ) && isset( $result['id'] ) ) {
             update_post_meta( $product_id, '_wphoula_product_id', $result['id'] );
+            delete_post_meta( $product_id, '_wphoula_withdrawn' );
             update_post_meta( $product_id, '_wphoula_synced', 1 );
             update_post_meta( $product_id, '_wphoula_sync_at', current_time( 'mysql' ) );
             if ( $ws_info ) {
@@ -372,8 +377,11 @@ class Wp_Houla_Sync {
         $overrides     = $ws_info ? $ws_info['overrides'] : array();
         $result        = $this->api->patch( '/ecommerce/products/' . $houla_id, $data, $overrides );
 
-        if ( ! is_wp_error( $result ) ) {
+        if ( $this->is_withdrawn( $result ) ) {
+            $this->mark_withdrawn( $product_id, $result );
+        } elseif ( ! is_wp_error( $result ) ) {
             $this->remember_houla_id( $product_id, $result );
+            delete_post_meta( $product_id, '_wphoula_withdrawn' );
             update_post_meta( $product_id, '_wphoula_sync_at', current_time( 'mysql' ) );
             if ( $ws_info ) {
                 update_post_meta( $product_id, '_wphoula_workspace_id', $ws_info['workspace_id'] );
@@ -471,6 +479,41 @@ class Wp_Houla_Sync {
         if ( get_post_meta( $product_id, '_wphoula_product_id', true ) !== $result['id'] ) {
             update_post_meta( $product_id, '_wphoula_product_id', $result['id'] );
         }
+    }
+
+    /**
+     * Whether Hou.la IGNORED this product because the seller deleted it on
+     * Hou.la (API answer `withdrawn: true`, product or batch detail).
+     *
+     * Since 2026-11-08 the API no longer brings back a product the seller
+     * deleted on Hou.la, unless the request carries `restore_withdrawn`. Until
+     * 1.6.8 the module counted such a product as synced and showed a success:
+     * real case (2026-11-09, « Les Perles de Jo », 659 products deleted from the
+     * Hou.la studio, every click on « Synchroniser » silently ignored).
+     *
+     * An API that does not send `withdrawn` yet gives false: same behaviour as
+     * before.
+     *
+     * @param mixed $answer API answer.
+     * @return bool
+     */
+    private function is_withdrawn( $answer ) {
+        return is_array( $answer ) && ! empty( $answer['withdrawn'] );
+    }
+
+    /**
+     * Record that the seller deleted this product on Hou.la: it is no longer
+     * synchronized (no `_wphoula_synced`), and the settings page offers to put
+     * it back (restore_withdrawn_products).
+     *
+     * @param int   $product_id WooCommerce product ID.
+     * @param array $answer     API answer (product or batch detail).
+     */
+    private function mark_withdrawn( $product_id, $answer ) {
+        $this->remember_houla_id( $product_id, $answer );
+        update_post_meta( $product_id, '_wphoula_withdrawn', 1 );
+        delete_post_meta( $product_id, '_wphoula_synced' );
+        $this->log( 'Product #' . $product_id . ' deleted by the seller on Hou.la: not synchronized (withdrawn).' );
     }
 
     /**
@@ -601,17 +644,179 @@ class Wp_Houla_Sync {
             }
         }
 
-        $result = $this->api->patch( '/ecommerce/products/' . $houla_id . '/stock', array(
+        $payload = array(
             'stock_quantity' => $product->get_stock_quantity(),
             'stock_status'   => $product->get_stock_status(),
             'manage_stock'   => $product->get_manage_stock(),
-        ), $overrides );
+        );
+
+        // Variable product: the stock lives on each VARIATION. Until 1.6.8 only
+        // the parent's figures were sent (empty for a parent that does not
+        // manage stock), so a variation sold in WooCommerce stayed available
+        // on Hou.la until the next full sync. The API matches each variation
+        // by its WooCommerce ID (`variant_stocks`, ShopEcommerceSyncService::
+        // updateStock); an older API ignores the field.
+        $variant_stocks = $this->variant_stocks( $product );
+        if ( ! empty( $variant_stocks ) ) {
+            $payload['variant_stocks'] = $variant_stocks;
+        }
+
+        $result = $this->api->patch( '/ecommerce/products/' . $houla_id . '/stock', $payload, $overrides );
 
         if ( ! is_wp_error( $result ) ) {
             update_post_meta( $product_id, '_wphoula_sync_at', current_time( 'mysql' ) );
         }
 
         self::$syncing = false;
+    }
+
+    /**
+     * Stock of each variation of a variable product, as the API expects it.
+     *
+     * @param WC_Product $product Parent product.
+     * @return array[] [{ external_variant_id, stock_quantity (null = unlimited) }]
+     */
+    private function variant_stocks( $product ) {
+        if ( ! $product->is_type( 'variable' ) ) {
+            return array();
+        }
+        $stocks = array();
+        foreach ( $product->get_children() as $variation_id ) {
+            $variation = wc_get_product( $variation_id );
+            if ( ! $variation ) {
+                continue;
+            }
+            $stocks[] = array(
+                'external_variant_id' => (string) $variation_id,
+                'stock_quantity'      => $variation->managing_stock() ? (int) $variation->get_stock_quantity() : null,
+            );
+        }
+        return $stocks;
+    }
+
+    // =====================================================================
+    // Products deleted by the seller on Hou.la (withdrawn)
+    // =====================================================================
+
+    /**
+     * WooCommerce IDs of the products Hou.la reported as deleted by the seller.
+     *
+     * @return int[]
+     */
+    public function get_withdrawn_product_ids() {
+        return array_map( 'absint', get_posts( array(
+            'post_type'      => 'product',
+            'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+            'meta_key'       => '_wphoula_withdrawn',
+            'meta_value'     => '1',
+            'fields'         => 'ids',
+            'posts_per_page' => -1,
+            'orderby'        => 'ID',
+            'order'          => 'ASC',
+            'no_found_rows'  => true,
+        ) ) );
+    }
+
+    /**
+     * How many products the seller deleted on Hou.la, and how many of them the
+     * « Les remettre sur Hou.la » button would send (only those in the filter).
+     *
+     * @return array { withdrawn: int, restorable: int }
+     */
+    public function count_withdrawn_products() {
+        $ids        = $this->get_withdrawn_product_ids();
+        $restorable = 0;
+        foreach ( $ids as $id ) {
+            if ( $this->should_sync_product( $id ) ) {
+                $restorable++;
+            }
+        }
+        return array( 'withdrawn' => count( $ids ), 'restorable' => $restorable );
+    }
+
+    /**
+     * « Les remettre sur Hou.la »: send back, with `restore_withdrawn`, the
+     * products the seller deleted on Hou.la. Only those INSIDE the sync filter:
+     * a product she left out of the filter must not come back on sale.
+     *
+     * Processes one chunk per call (the admin page calls again while
+     * `remaining` > 0), so 600 products never hit the PHP time limit.
+     *
+     * @param int $limit Products per call.
+     * @return array { restored, still_withdrawn, errors, remaining, skipped_out_of_filter }
+     */
+    public function restore_withdrawn_products( $limit = 20 ) {
+        $out = array( 'restored' => 0, 'still_withdrawn' => 0, 'errors' => 0, 'remaining' => 0, 'skipped_out_of_filter' => 0 );
+        if ( ! $this->auth->is_connected() ) {
+            $out['error_message'] = 'Not connected';
+            return $out;
+        }
+
+        $ids   = array();
+        foreach ( $this->get_withdrawn_product_ids() as $id ) {
+            if ( $this->should_sync_product( $id ) ) {
+                $ids[] = $id;
+            } else {
+                $out['skipped_out_of_filter']++;
+            }
+        }
+        $chunk = array_slice( $ids, 0, max( 1, absint( $limit ) ) );
+
+        // One batch call per workspace (multi-workspace routing).
+        $groups = array();
+        foreach ( $chunk as $id ) {
+            $product = wc_get_product( $id );
+            if ( ! $product ) {
+                delete_post_meta( $id, '_wphoula_withdrawn' );
+                continue;
+            }
+            $ws_info = $this->resolve_workspace_for_product( $product );
+            $key     = $ws_info ? $ws_info['workspace_id'] : '_default';
+            if ( ! isset( $groups[ $key ] ) ) {
+                $groups[ $key ] = array( 'ws_info' => $ws_info, 'ids' => array(), 'data' => array() );
+            }
+            $data                      = $this->format_product_for_workspace( $product, $ws_info );
+            $data['restore_withdrawn'] = true;
+            $groups[ $key ]['ids'][]   = $id;
+            $groups[ $key ]['data'][]  = $data;
+        }
+
+        self::$syncing = true;
+        foreach ( $groups as $group ) {
+            $overrides = $group['ws_info'] ? $group['ws_info']['overrides'] : array();
+            $result    = $this->api->post( '/ecommerce/products/batch', array( 'products' => $group['data'] ), $overrides );
+            if ( is_wp_error( $result ) ) {
+                $out['errors']       += count( $group['ids'] );
+                $out['error_message'] = $result->get_error_message();
+                $this->log( 'Restore withdrawn products failed: ' . $result->get_error_message() );
+                continue;
+            }
+            $details = isset( $result['details'] ) && is_array( $result['details'] ) ? $result['details'] : array();
+            foreach ( $group['ids'] as $idx => $wc_id ) {
+                $detail = isset( $details[ $idx ] ) ? $details[ $idx ] : null;
+                if ( ! is_array( $detail ) || isset( $detail['error'] ) ) {
+                    $out['errors']++;
+                } elseif ( $this->is_withdrawn( $detail ) ) {
+                    $out['still_withdrawn']++; // Refused by Hou.la: stays listed.
+                } else {
+                    $this->remember_houla_id( $wc_id, $detail );
+                    delete_post_meta( $wc_id, '_wphoula_withdrawn' );
+                    update_post_meta( $wc_id, '_wphoula_synced', 1 );
+                    update_post_meta( $wc_id, '_wphoula_sync_at', current_time( 'mysql' ) );
+                    if ( $group['ws_info'] ) {
+                        update_post_meta( $wc_id, '_wphoula_workspace_id', $group['ws_info']['workspace_id'] );
+                    }
+                    $out['restored']++;
+                }
+            }
+        }
+        self::$syncing = false;
+
+        // What is left to send (a refused or failed product would loop
+        // forever: the page stops when nothing was restored in a round).
+        $out['remaining'] = max( 0, count( $ids ) - $out['restored'] );
+        $this->log( 'Restore withdrawn: ' . $out['restored'] . ' restored, ' . $out['remaining'] . ' remaining, ' . $out['errors'] . ' errors.' );
+        return $out;
     }
 
     // =====================================================================
@@ -699,6 +904,7 @@ class Wp_Houla_Sync {
             $this->register_connection();
             set_transient( 'wphoula_batch_running_synced', 0, HOUR_IN_SECONDS );
             set_transient( 'wphoula_batch_running_errors', 0, HOUR_IN_SECONDS );
+            set_transient( 'wphoula_batch_running_withdrawn', 0, HOUR_IN_SECONDS );
         }
 
         $limit = 20;
@@ -708,8 +914,9 @@ class Wp_Houla_Sync {
 
         $products = wc_get_products( $args );
 
-        $synced = 0;
-        $errors = 0;
+        $synced    = 0;
+        $errors    = 0;
+        $withdrawn = 0;
 
         // Group products by workspace (default workspace vs mapped workspaces)
         // Each group: { overrides: array, new: [{data, wc_id}], update: [{data, wc_id, houla_id}] }
@@ -767,6 +974,7 @@ class Wp_Houla_Sync {
                     if ( $this->is_connection_error( $batch_result ) ) {
                         return array(
                             'synced'           => $synced,
+                            'withdrawn'        => $withdrawn,
                             'errors'           => $errors + count( $group['new'] ),
                             'page'             => $page,
                             'has_more'         => false,
@@ -785,10 +993,14 @@ class Wp_Houla_Sync {
                         if ( isset( $detail['error'] ) ) {
                             $errors++;
                             $this->log( 'Batch create error for WC #' . $wc_id . ': ' . $detail['error'] );
+                        } elseif ( $this->is_withdrawn( $detail ) ) {
+                            $withdrawn++;
+                            $this->mark_withdrawn( $wc_id, $detail );
                         } else {
                             if ( isset( $detail['id'] ) ) {
                                 update_post_meta( $wc_id, '_wphoula_product_id', $detail['id'] );
                             }
+                            delete_post_meta( $wc_id, '_wphoula_withdrawn' );
                             update_post_meta( $wc_id, '_wphoula_synced', 1 );
                             update_post_meta( $wc_id, '_wphoula_sync_at', current_time( 'mysql' ) );
                             if ( $ws_info ) {
@@ -814,6 +1026,7 @@ class Wp_Houla_Sync {
                     if ( $this->is_connection_error( $batch_result ) ) {
                         return array(
                             'synced'           => $synced,
+                            'withdrawn'        => $withdrawn,
                             'errors'           => $errors + count( $group['update'] ),
                             'page'             => $page,
                             'has_more'         => false,
@@ -832,8 +1045,12 @@ class Wp_Houla_Sync {
                         if ( isset( $detail['error'] ) ) {
                             $errors++;
                             $this->log( 'Batch update error for WC #' . $wc_id . ': ' . $detail['error'] );
+                        } elseif ( $this->is_withdrawn( $detail ) ) {
+                            $withdrawn++;
+                            $this->mark_withdrawn( $wc_id, $detail );
                         } else {
                             $this->remember_houla_id( $wc_id, $detail );
+                            delete_post_meta( $wc_id, '_wphoula_withdrawn' );
                             update_post_meta( $wc_id, '_wphoula_synced', 1 );
                             update_post_meta( $wc_id, '_wphoula_sync_at', current_time( 'mysql' ) );
                             if ( $ws_info ) {
@@ -847,10 +1064,12 @@ class Wp_Houla_Sync {
         }
 
         // Accumulate running totals across pages
-        $running_synced = (int) get_transient( 'wphoula_batch_running_synced' ) + $synced;
-        $running_errors = (int) get_transient( 'wphoula_batch_running_errors' ) + $errors;
+        $running_synced    = (int) get_transient( 'wphoula_batch_running_synced' ) + $synced;
+        $running_errors    = (int) get_transient( 'wphoula_batch_running_errors' ) + $errors;
+        $running_withdrawn = (int) get_transient( 'wphoula_batch_running_withdrawn' ) + $withdrawn;
         set_transient( 'wphoula_batch_running_synced', $running_synced, HOUR_IN_SECONDS );
         set_transient( 'wphoula_batch_running_errors', $running_errors, HOUR_IN_SECONDS );
+        set_transient( 'wphoula_batch_running_withdrawn', $running_withdrawn, HOUR_IN_SECONDS );
 
         $has_more = count( $products ) === $limit;
 
@@ -860,9 +1079,10 @@ class Wp_Houla_Sync {
             $this->options->set( 'last_full_sync', current_time( 'mysql' ) );
             delete_transient( 'wphoula_batch_running_synced' );
             delete_transient( 'wphoula_batch_running_errors' );
+            delete_transient( 'wphoula_batch_running_withdrawn' );
         }
 
-        return array( 'synced' => $synced, 'errors' => $errors, 'page' => $page, 'has_more' => $has_more );
+        return array( 'synced' => $synced, 'errors' => $errors, 'withdrawn' => $withdrawn, 'page' => $page, 'has_more' => $has_more );
     }
 
     /**
@@ -892,9 +1112,10 @@ class Wp_Houla_Sync {
 
         $page    = 1;
         $limit   = 50;
-        $synced  = 0;
-        $skipped = 0;
-        $errors  = 0;
+        $synced    = 0;
+        $skipped   = 0;
+        $errors    = 0;
+        $withdrawn = 0;
 
         $query_args          = $this->build_batch_query_args();
         $query_args['limit'] = $limit;
@@ -930,7 +1151,14 @@ class Wp_Houla_Sync {
                     continue;
                 }
 
+                if ( $this->is_withdrawn( $result ) ) {
+                    $withdrawn++;
+                    $this->mark_withdrawn( $product_id, $result );
+                    continue;
+                }
+
                 $this->remember_houla_id( $product_id, $result );
+                delete_post_meta( $product_id, '_wphoula_withdrawn' );
 
                 update_post_meta( $product_id, '_wphoula_synced', 1 );
                 update_post_meta( $product_id, '_wphoula_sync_at', current_time( 'mysql' ) );
@@ -949,9 +1177,9 @@ class Wp_Houla_Sync {
 
         delete_transient( 'wphoula_batch_sync_lock' );
 
-        $this->log( "Batch sync complete: $synced synced, $skipped skipped, $errors errors." );
+        $this->log( "Batch sync complete: $synced synced, $skipped skipped, $errors errors, $withdrawn withdrawn." );
 
-        return compact( 'synced', 'skipped', 'errors' );
+        return compact( 'synced', 'skipped', 'errors', 'withdrawn' );
     }
 
     // =====================================================================

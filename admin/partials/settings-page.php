@@ -690,6 +690,15 @@ $workspace_has_shop = (bool) $options->get( 'workspace_has_shop' );
                 <span id="wphoula-sync-status" class="wphoula-spinner" style="display:none;"></span>
             </p>
 
+            <!-- Produits supprimés par la vendeuse sur Hou.la (1.6.9) -->
+            <div id="wphoula-withdrawn-notice" class="notice notice-warning inline" style="display:none; margin: 12px 0; padding: 10px 12px;">
+                <p id="wphoula-withdrawn-text" style="margin: 0 0 8px;"></p>
+                <p style="margin: 0;">
+                    <button type="button" class="button" id="wphoula-restore-withdrawn"><?php esc_html_e( 'Les remettre sur Hou.la', 'wp-houla' ); ?></button>
+                    <span id="wphoula-restore-withdrawn-status" style="margin-left: 8px;"></span>
+                </p>
+            </div>
+
             <!-- Progress bar (hidden by default) -->
             <div id="wphoula-sync-progress" class="wphoula-progress" style="display:none;">
                 <div class="wphoula-progress-bar">

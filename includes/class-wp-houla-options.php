@@ -147,8 +147,7 @@ class Wp_Houla_Options {
      * @param mixed  $value
      */
     public function set( $key, $value ) {
-        $this->_options[ $key ] = $value;
-        $this->save();
+        $this->save( array( $key => $value ) );
     }
 
     /**
@@ -157,16 +156,30 @@ class Wp_Houla_Options {
      * @param array $pairs Key-value pairs.
      */
     public function set_many( array $pairs ) {
-        foreach ( $pairs as $key => $value ) {
-            $this->_options[ $key ] = $value;
-        }
-        $this->save();
+        $this->save( $pairs );
     }
 
     /**
-     * Persist current options to the database.
+     * Persist the given options, on top of what is in the database NOW.
+     *
+     * Until 1.6.8 the whole array read when this object was built was written
+     * back. A full sync runs for up to 30 minutes in one request, then writes
+     * its counters (products_synced, last_full_sync): every setting saved
+     * meanwhile was silently undone, the category filter included (banc du
+     * 2026-11-09). Only the keys given here are written now.
+     *
+     * @param array $pairs Key-value pairs to write.
      */
-    private function save() {
+    private function save( array $pairs ) {
+        // The options may have been written by another request since this
+        // one started: drop the request cache and read them again.
+        wp_cache_delete( WPHOULA_OPTIONS, 'options' );
+        wp_cache_delete( 'alloptions', 'options' );
+        $current = get_option( WPHOULA_OPTIONS, array() );
+        if ( ! is_array( $current ) ) {
+            $current = array();
+        }
+        $this->_options = array_merge( $this->_options, $current, $pairs );
         update_option( WPHOULA_OPTIONS, $this->_options );
     }
 

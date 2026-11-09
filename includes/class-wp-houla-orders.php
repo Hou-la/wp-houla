@@ -8,7 +8,7 @@
  * - Maps products by external_id (WooCommerce product ID)
  * - Sets billing/shipping from the webhook payload
  * - Marks payment as "houla_pay"
- * - Decrements stock
+ * - Takes the stock once, with WooCommerce's bookkeeping (reduce_order_stock)
  * - Stores Hou.la metadata (_houla_order_id, _houla_transaction_id)
  *
  * @since      1.0.0
@@ -111,10 +111,13 @@ class Wp_Houla_Orders {
                     ) );
                 }
 
-                // Decrement stock
-                if ( $product && $product->get_manage_stock() ) {
-                    wc_update_product_stock( $product, $quantity, 'decrease' );
-                }
+                // Stock: taken ONCE, after the save (reduce_order_stock).
+                // Until 1.6.8 it was decreased here by hand, then WooCommerce
+                // decreased it AGAIN when the order entered « processing » or
+                // « on-hold » (wc_maybe_reduce_stock_levels): a product sold
+                // once on Hou.la, during a live for instance, lost 2 units in
+                // WooCommerce, and the module pushed that wrong stock back to
+                // Hou.la (banc du 2026-11-09 : 10 → 8 pour 1 vente).
             }
 
             // ----------------------------------------------------------
@@ -325,6 +328,9 @@ class Wp_Houla_Orders {
                 $this->log( 'Forced status to "wc-' . $initial_status . '" via direct DB update for WC #' . $order->get_id() );
             }
 
+            // Stock taken once, whatever the status (open cart included).
+            $this->reduce_order_stock( $order->get_id() );
+
             // Update counters
             $this->increment_counter( 'orders_received' );
             $this->options->set( 'last_order_at', current_time( 'mysql' ) );
@@ -373,6 +379,12 @@ class Wp_Houla_Orders {
                 return new WP_Error( 'wphoula_order_not_found', 'WC order #' . $order_id . ' not found.' );
             }
 
+            // Stock already taken for this order, per product (see
+            // reduce_order_stock): the items are replaced below, so only the
+            // DIFFERENCE is applied afterwards (apply_stock_difference).
+            $this->adopt_legacy_stock( $order );
+            $taken = $this->stock_taken( $order );
+
             // ----------------------------------------------------------
             // Remove ALL existing line items (products, fees, shipping)
             // ----------------------------------------------------------
@@ -406,6 +418,11 @@ class Wp_Houla_Orders {
                     ) );
                 }
             }
+
+            // Stock: an item added to an open cart (live) was never taken
+            // from WooCommerce until 1.6.8, and the units already taken were
+            // taken AGAIN when the cart closed. Only the difference moves now.
+            $this->apply_stock_difference( $order, $taken );
 
             // ----------------------------------------------------------
             // Re-add shipping
@@ -546,6 +563,7 @@ class Wp_Houla_Orders {
         }
 
         $order  = wc_get_order( $order_id );
+        $this->adopt_legacy_stock( $order );
         $reason = isset( $data['reason'] ) ? sanitize_text_field( $data['reason'] ) : __( 'Refunded via Hou.la.', 'wp-houla' );
 
         // Determine refund amount: use webhook value or fall back to order total
@@ -566,6 +584,13 @@ class Wp_Houla_Orders {
         if ( is_wp_error( $refund ) ) {
             $this->log( 'Refund failed for WC #' . $order_id . ': ' . $refund->get_error_message() );
             return $refund;
+        }
+
+        // Hou.la puts these items back in ITS stock (restoreStockForOrder) and
+        // lists them in `items`. wc_create_refund() restocks nothing without
+        // refund lines, so WooCommerce kept them out of stock until 1.6.8.
+        if ( $restock && ! empty( $data['items'] ) && is_array( $data['items'] ) ) {
+            $this->restock_items( $order, $data['items'] );
         }
 
         // Only set status to refunded if full refund (amount >= order total)
@@ -661,6 +686,11 @@ class Wp_Houla_Orders {
         $order     = wc_get_order( $order_id );
         $wc_status = sanitize_text_field( $data['wc_status'] );
 
+        // An order created before 1.6.9 had its stock taken by hand: without
+        // this, WooCommerce takes it again when the cart closes (open-cart →
+        // processing).
+        $this->adopt_legacy_stock( $order );
+
         // Lus AVANT d'être écrasés plus bas : ils disent si l'acheteuse a déjà
         // été prévenue de CET envoi (cf. l'e-mail « en cours de livraison »).
         $previous_status   = $order->get_status();
@@ -731,6 +761,186 @@ class Wp_Houla_Orders {
         $this->log( 'Order WC #' . $order_id . ' status changed to "' . $wc_status . '" (Hou.la ' . $data['houla_order_id'] . ').' );
 
         return array( 'order_id' => $order_id );
+    }
+
+    // =====================================================================
+    // Stock (one reduction per unit, WooCommerce bookkeeping)
+    // =====================================================================
+
+    /**
+     * Take the order's stock ONCE, with WooCommerce's own bookkeeping: each
+     * line keeps `_reduced_stock`, and the order is flagged, so neither a later
+     * « processing » / « on-hold » nor a second call takes it again, and a
+     * cancellation gives back exactly what was taken (wc_increase_stock_levels).
+     *
+     * @param int $order_id WooCommerce order ID.
+     */
+    private function reduce_order_stock( $order_id ) {
+        if ( ! function_exists( 'wc_reduce_stock_levels' ) ) {
+            return;
+        }
+        wc_reduce_stock_levels( $order_id ); // Skips lines already taken.
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return;
+        }
+        $this->flag_stock_reduced( $order );
+        $order->update_meta_data( '_houla_stock_v2', '1' );
+        $order->save_meta_data();
+    }
+
+    /**
+     * WooCommerce's « stock already reduced » flag on the order
+     * (wc_maybe_reduce_stock_levels reads it before reducing).
+     *
+     * @param WC_Order $order WooCommerce order.
+     */
+    private function flag_stock_reduced( $order ) {
+        if ( method_exists( $order, 'get_data_store' ) ) {
+            $order->get_data_store()->set_stock_reduced( $order->get_id(), true );
+        }
+    }
+
+    /**
+     * Orders created before 1.6.9: create_order() took the stock by hand,
+     * without WooCommerce's bookkeeping. Record it now (`_reduced_stock` = the
+     * line quantity), so WooCommerce does not take it a second time when the
+     * cart closes, and a cancellation gives it back.
+     *
+     * Limit: an item ADDED to an open cart before 1.6.9 was never taken; it is
+     * recorded as taken too (the module cannot tell it apart), so the stock of
+     * such an item stays one sale too high, as it already was.
+     *
+     * @param WC_Order $order WooCommerce order.
+     */
+    private function adopt_legacy_stock( $order ) {
+        if ( ! $order || '1' === (string) $order->get_meta( '_houla_stock_v2' ) || ! $order->get_meta( '_houla_order_id' ) ) {
+            return;
+        }
+        foreach ( $order->get_items( 'line_item' ) as $item ) {
+            if ( ! $item instanceof WC_Order_Item_Product ) {
+                continue;
+            }
+            $product = $item->get_product();
+            if ( '' === (string) $item->get_meta( '_reduced_stock', true ) && $product && $product->managing_stock() ) {
+                $item->update_meta_data( '_reduced_stock', $item->get_quantity() );
+                $item->save();
+            }
+        }
+        $this->flag_stock_reduced( $order );
+        $order->update_meta_data( '_houla_stock_v2', '1' );
+        $order->save_meta_data();
+    }
+
+    /**
+     * Units already taken from the WooCommerce stock, per product (the
+     * variation when there is one).
+     *
+     * @param WC_Order $order WooCommerce order.
+     * @return array product or variation ID => units
+     */
+    private function stock_taken( $order ) {
+        $taken = array();
+        foreach ( $order->get_items( 'line_item' ) as $item ) {
+            if ( ! $item instanceof WC_Order_Item_Product ) {
+                continue;
+            }
+            $key           = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
+            $taken[ $key ] = ( isset( $taken[ $key ] ) ? $taken[ $key ] : 0 ) + (int) $item->get_meta( '_reduced_stock', true );
+        }
+        return $taken;
+    }
+
+    /**
+     * After the items of an order were replaced: move the stock by the
+     * DIFFERENCE with what was already taken, and record the new lines as
+     * taken (`_reduced_stock`), so WooCommerce never takes them again.
+     *
+     * @param WC_Order $order WooCommerce order (new items added, not saved).
+     * @param array    $taken stock_taken() BEFORE the items were replaced.
+     */
+    private function apply_stock_difference( $order, array $taken ) {
+        $wanted   = array();
+        $products = array();
+        foreach ( $order->get_items( 'line_item' ) as $item ) {
+            if ( ! $item instanceof WC_Order_Item_Product ) {
+                continue;
+            }
+            $product = $item->get_product();
+            if ( ! $product || ! $product->managing_stock() ) {
+                continue;
+            }
+            $key              = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
+            $wanted[ $key ]   = ( isset( $wanted[ $key ] ) ? $wanted[ $key ] : 0 ) + (int) $item->get_quantity();
+            $products[ $key ] = $product;
+            $item->update_meta_data( '_reduced_stock', $item->get_quantity() );
+        }
+        foreach ( $wanted as $key => $qty ) {
+            $diff = $qty - ( isset( $taken[ $key ] ) ? $taken[ $key ] : 0 );
+            if ( $diff > 0 ) {
+                wc_update_product_stock( $products[ $key ], $diff, 'decrease' );
+            } elseif ( $diff < 0 ) {
+                wc_update_product_stock( $products[ $key ], -$diff, 'increase' );
+            }
+        }
+        // Products no longer in the order: their units come back.
+        foreach ( $taken as $key => $units ) {
+            if ( $units > 0 && ! isset( $wanted[ $key ] ) ) {
+                $product = wc_get_product( $key );
+                if ( $product && $product->managing_stock() ) {
+                    wc_update_product_stock( $product, $units, 'increase' );
+                }
+            }
+        }
+        $this->flag_stock_reduced( $order );
+        $order->update_meta_data( '_houla_stock_v2', '1' );
+    }
+
+    /**
+     * Put back in stock the items of a refund (`items`: external_id = the
+     * WooCommerce product ID, quantity), within what was taken for each line.
+     *
+     * @param WC_Order $order WooCommerce order.
+     * @param array    $items Refunded items from Hou.la.
+     */
+    private function restock_items( $order, array $items ) {
+        $notes = array();
+        foreach ( $items as $wanted ) {
+            $product_id = isset( $wanted['external_id'] ) ? absint( $wanted['external_id'] ) : 0;
+            $left       = isset( $wanted['quantity'] ) ? max( 0, absint( $wanted['quantity'] ) ) : 0;
+            if ( ! $product_id || ! $left ) {
+                continue;
+            }
+            foreach ( $order->get_items( 'line_item' ) as $item ) {
+                if ( $left <= 0 ) {
+                    break;
+                }
+                if ( ! $item instanceof WC_Order_Item_Product ) {
+                    continue;
+                }
+                if ( (int) $item->get_product_id() !== $product_id && (int) $item->get_variation_id() !== $product_id ) {
+                    continue;
+                }
+                $taken   = (int) $item->get_meta( '_reduced_stock', true );
+                $product = $item->get_product();
+                $n       = min( $left, $taken );
+                if ( $n <= 0 || ! $product || ! $product->managing_stock() ) {
+                    continue;
+                }
+                $new = wc_update_product_stock( $product, $n, 'increase' );
+                if ( $taken - $n > 0 ) {
+                    $item->update_meta_data( '_reduced_stock', $taken - $n );
+                } else {
+                    $item->delete_meta_data( '_reduced_stock' );
+                }
+                $item->save();
+                $left   -= $n;
+                $notes[] = $product->get_formatted_name() . ' +' . $n . ' (' . $new . ')';
+            }
+        }
+        if ( $notes ) {
+            $order->add_order_note( __( 'Stock remis après remboursement Hou.la :', 'wp-houla' ) . ' ' . implode( ', ', $notes ) );
+        }
     }
 
     // =====================================================================

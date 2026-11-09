@@ -493,4 +493,247 @@ class ProductSyncTest extends TestCase {
         }
         $this->assertContains( '_other_plugin', $exclude );
     }
+
+    // ── Produits supprimés par la vendeuse sur Hou.la (1.6.9) ───────────
+    // « Les Perles de Jo », 2026-11-09 : 659 produits supprimés depuis le
+    // studio Hou.la ; chaque « Synchroniser » répondait succès sans rien faire.
+
+    private function stubBatchQuery( array $products, array $linked ) {
+        if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+            define( 'HOUR_IN_SECONDS', 3600 );
+        }
+        Functions\when( 'wc_get_products' )->alias( function ( $args ) use ( $products ) {
+            return ( $args['return'] ?? '' ) === 'ids' ? array_map( function ( $p ) { return $p->get_id(); }, $products ) : $products;
+        } );
+        Functions\when( 'get_term' )->justReturn( (object) array( 'slug' => 'perles' ) );
+        Functions\when( 'get_posts' )->justReturn( $linked );
+        Functions\when( 'get_transient' )->justReturn( 0 );
+        Functions\when( 'set_transient' )->justReturn( true );
+        Functions\when( 'delete_transient' )->justReturn( true );
+    }
+
+    public function test_batch_reports_a_product_deleted_on_houla_instead_of_counting_it_synced() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, array(
+            'synced'    => 1,
+            'withdrawn' => 1,
+            'details'   => array(
+                array( 'external_id' => '1201', 'id' => 'h1201', 'withdrawn' => true ),
+                array( 'external_id' => '1202', 'id' => 'h1202' ),
+            ),
+        ) );
+        $this->meta[1201] = array( '_wphoula_product_id' => 'h1201', '_wphoula_synced' => 1 );
+        $this->meta[1202] = array( '_wphoula_product_id' => 'h1202', '_wphoula_synced' => 1 );
+        $this->stubBatchQuery( array( $this->makeProduct( 1201 ), $this->makeProduct( 1202 ) ), array() );
+
+        $r = $sync->batch_sync_page( 2 );
+
+        $this->assertSame( 1, $r['synced'] );
+        $this->assertSame( 1, $r['withdrawn'] );
+        $this->assertArrayNotHasKey( '_wphoula_synced', $this->meta[1201] );
+        $this->assertSame( 1, $this->meta[1201]['_wphoula_withdrawn'] );
+        $this->assertSame( 1, $this->meta[1202]['_wphoula_synced'] );
+        $this->assertArrayNotHasKey( '_wphoula_withdrawn', $this->meta[1202] );
+    }
+
+    /** Contre-témoin : une API qui ne renvoie pas encore `withdrawn` (prod au 2026-11-09). */
+    public function test_batch_with_an_older_api_behaves_as_before() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, array(
+            'synced'  => 1,
+            'details' => array( array( 'external_id' => '1201', 'id' => 'h1201' ) ),
+        ) );
+        $this->meta[1201] = array( '_wphoula_product_id' => 'h1201' );
+        $this->stubBatchQuery( array( $this->makeProduct( 1201 ) ), array() );
+
+        $r = $sync->batch_sync_page( 2 );
+
+        $this->assertSame( 1, $r['synced'] );
+        $this->assertSame( 0, $r['withdrawn'] );
+        $this->assertSame( 1, $this->meta[1201]['_wphoula_synced'] );
+    }
+
+    public function test_product_restored_on_houla_loses_its_withdrawn_mark() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, array(
+            'details' => array( array( 'external_id' => '1201', 'id' => 'h1201' ) ),
+        ) );
+        $this->meta[1201] = array( '_wphoula_product_id' => 'h1201', '_wphoula_withdrawn' => 1 );
+        $this->stubBatchQuery( array( $this->makeProduct( 1201 ) ), array() );
+
+        $sync->batch_sync_page( 2 );
+
+        $this->assertArrayNotHasKey( '_wphoula_withdrawn', $this->meta[1201] );
+        $this->assertSame( 1, $this->meta[1201]['_wphoula_synced'] );
+    }
+
+    public function test_automatic_update_of_a_product_deleted_on_houla_marks_it() {
+        $sync = $this->makeSync( array( 'auto_sync' => true ), true, array( 'id' => 'h1201', 'withdrawn' => true ) );
+        $this->meta[1201] = array( '_wphoula_product_id' => 'h1201', '_wphoula_synced' => 1 );
+
+        $sync->on_product_updated( 1201, $this->makeProduct( 1201 ) );
+
+        $this->assertSame( array( array( 'PATCH', '/ecommerce/products/h1201' ) ), $this->calls );
+        $this->assertArrayNotHasKey( 'restore_withdrawn', $this->payloads[0] );
+        $this->assertSame( 1, $this->meta[1201]['_wphoula_withdrawn'] );
+        $this->assertArrayNotHasKey( '_wphoula_synced', $this->meta[1201] );
+    }
+
+    public function test_restore_sends_only_the_products_inside_the_filter_with_restore_withdrawn() {
+        $sync = $this->makeSync( array( 'sync_categories' => array( 727 ) ), true, array(
+            'details' => array(
+                array( 'external_id' => '1201', 'id' => 'h1201' ),
+                array( 'external_id' => '1202', 'id' => 'h1202' ),
+            ),
+        ) );
+        $this->cats[1201] = array( 727 );
+        $this->cats[1202] = array( 727 );
+        $this->cats[1203] = array( 906 ); // hors filtre : ne revient pas
+        foreach ( array( 1201, 1202, 1203 ) as $id ) {
+            $this->meta[ $id ] = array( '_wphoula_product_id' => 'h' . $id, '_wphoula_withdrawn' => 1 );
+        }
+        Functions\when( 'get_posts' )->justReturn( array( 1201, 1202, 1203 ) );
+        Functions\when( 'wc_get_product' )->alias( function ( $id ) {
+            return $this->makeProduct( $id );
+        } );
+
+        $this->assertSame( array( 'withdrawn' => 3, 'restorable' => 2 ), $sync->count_withdrawn_products() );
+        $r = $sync->restore_withdrawn_products( 20 );
+
+        $this->assertSame( array( array( 'POST', '/ecommerce/products/batch' ) ), $this->calls );
+        $sent = $this->payloads[0]['products'];
+        $this->assertSame( array( '1201', '1202' ), array_column( $sent, 'external_id' ) );
+        $this->assertSame( array( true, true ), array_column( $sent, 'restore_withdrawn' ) );
+        $this->assertSame( 2, $r['restored'] );
+        $this->assertSame( 0, $r['remaining'] );
+        $this->assertSame( 1, $r['skipped_out_of_filter'] );
+        $this->assertArrayNotHasKey( '_wphoula_withdrawn', $this->meta[1201] );
+        $this->assertSame( 1, $this->meta[1203]['_wphoula_withdrawn'] );
+    }
+
+    public function test_restore_refused_by_houla_keeps_the_product_listed_and_stops() {
+        $sync = $this->makeSync( array(), true, array(
+            'details' => array( array( 'external_id' => '1201', 'id' => 'h1201', 'withdrawn' => true ) ),
+        ) );
+        $this->meta[1201] = array( '_wphoula_product_id' => 'h1201', '_wphoula_withdrawn' => 1 );
+        Functions\when( 'get_posts' )->justReturn( array( 1201 ) );
+        Functions\when( 'wc_get_product' )->alias( function ( $id ) {
+            return $this->makeProduct( $id );
+        } );
+
+        $r = $sync->restore_withdrawn_products( 20 );
+
+        $this->assertSame( 0, $r['restored'] );
+        $this->assertSame( 1, $r['still_withdrawn'] );
+        $this->assertSame( 1, $r['remaining'] ); // la page s'arrête : 0 restauré ce tour-ci
+        $this->assertSame( 1, $this->meta[1201]['_wphoula_withdrawn'] );
+    }
+
+    // ── Crochets de création (2026-11-09) ───────────────────────────────
+
+    public function test_new_product_inside_the_filter_is_created_and_linked() {
+        $sync = $this->makeSync( array( 'auto_sync' => true, 'sync_on_publish' => true, 'sync_categories' => array( 727 ) ) );
+        $this->cats[1300] = array( 727 );
+
+        $sync->on_product_created( 1300, $this->makeProduct( 1300 ) );
+
+        $this->assertSame( array( array( 'POST', '/ecommerce/products' ) ), $this->calls );
+        $this->assertSame( 'houla-new', $this->meta[1300]['_wphoula_product_id'] );
+        $this->assertSame( 1, $this->meta[1300]['_wphoula_synced'] );
+    }
+
+    public function test_new_product_is_not_created_when_sync_on_publish_is_off() {
+        $sync = $this->makeSync( array( 'auto_sync' => true, 'sync_on_publish' => false ) );
+
+        $sync->on_product_created( 1300, $this->makeProduct( 1300 ) );
+
+        $this->assertSame( array(), $this->calls );
+    }
+
+    public function test_first_save_of_an_unlinked_product_creates_it() {
+        // Écran d'administration : brouillon automatique, puis « Publier » =
+        // woocommerce_update_product sur un produit sans lien Hou.la.
+        $sync = $this->makeSync( array( 'auto_sync' => true, 'sync_on_publish' => true ) );
+
+        $sync->on_product_updated( 1301, $this->makeProduct( 1301 ) );
+
+        $this->assertSame( array( array( 'POST', '/ecommerce/products' ) ), $this->calls );
+    }
+
+    public function test_product_entering_the_filter_is_created() {
+        $sync = $this->makeSync( array( 'auto_sync' => true, 'sync_on_publish' => true, 'sync_categories' => array( 727 ) ) );
+        $this->cats[1302] = array( 727 ); // vient d'être rangé dans une catégorie cochée
+
+        $sync->on_product_updated( 1302, $this->makeProduct( 1302 ) );
+
+        $this->assertSame( array( array( 'POST', '/ecommerce/products' ) ), $this->calls );
+        $this->assertSame( 'active', $this->payloads[0]['status'] );
+    }
+
+    // ── Stock (2026-11-09) ──────────────────────────────────────────────
+
+    private function makeVariable( $id, array $children ) {
+        return new class( $id, $children ) {
+            private $id;
+            private $children;
+            public function __construct( $id, $children ) { $this->id = $id; $this->children = $children; }
+            public function get_id() { return $this->id; }
+            public function is_type( $t ) { return 'variable' === $t; }
+            public function get_children() { return $this->children; }
+            public function get_stock_quantity() { return null; }
+            public function get_stock_status() { return 'instock'; }
+            public function get_manage_stock() { return false; }
+        };
+    }
+
+    private function makeVariation( $id, $parent, $qty ) {
+        return new class( $id, $parent, $qty ) {
+            private $id;
+            private $parent;
+            private $qty;
+            public function __construct( $id, $parent, $qty ) { $this->id = $id; $this->parent = $parent; $this->qty = $qty; }
+            public function get_id() { return $this->id; }
+            public function get_parent_id() { return $this->parent; }
+            public function is_type( $t ) { return 'variation' === $t; }
+            public function managing_stock() { return null !== $this->qty; }
+            public function get_stock_quantity() { return $this->qty; }
+        };
+    }
+
+    public function test_variation_stock_change_sends_the_stock_of_each_variation() {
+        $sync   = $this->makeSync( array( 'auto_sync' => true ) );
+        $parent = $this->makeVariable( 1400, array( 1401, 1402 ) );
+        $bleu   = $this->makeVariation( 1401, 1400, 1 );
+        $rouge  = $this->makeVariation( 1402, 1400, null ); // stock non géré = illimité
+        Functions\when( 'wc_get_product' )->alias( function ( $id ) use ( $parent, $bleu, $rouge ) {
+            return array( 1400 => $parent, 1401 => $bleu, 1402 => $rouge )[ $id ] ?? false;
+        } );
+        $this->meta[1400]['_wphoula_product_id'] = 'h1400';
+
+        $sync->on_stock_changed( $bleu );
+
+        $this->assertSame( array( array( 'PATCH', '/ecommerce/products/h1400/stock' ) ), $this->calls );
+        $this->assertSame( array(
+            array( 'external_variant_id' => '1401', 'stock_quantity' => 1 ),
+            array( 'external_variant_id' => '1402', 'stock_quantity' => null ),
+        ), $this->payloads[0]['variant_stocks'] );
+    }
+
+    public function test_simple_product_stock_change_sends_no_variant_stocks() {
+        $sync    = $this->makeSync( array( 'auto_sync' => true ) );
+        $product = $this->makeProduct( 1500 );
+        $this->meta[1500]['_wphoula_product_id'] = 'h1500';
+
+        $sync->on_stock_changed( $product );
+
+        $this->assertSame( array( array( 'PATCH', '/ecommerce/products/h1500/stock' ) ), $this->calls );
+        $this->assertArrayNotHasKey( 'variant_stocks', $this->payloads[0] );
+    }
+
+    public function test_stock_change_of_a_product_outside_the_filter_is_not_sent() {
+        $sync = $this->makeSync( array( 'auto_sync' => true, 'sync_categories' => array( 727 ) ) );
+        $this->cats[1500] = array( 906 );
+        $this->meta[1500]['_wphoula_product_id'] = 'h1500';
+
+        $sync->on_stock_changed( $this->makeProduct( 1500 ) );
+
+        $this->assertSame( array(), $this->calls );
+    }
 }

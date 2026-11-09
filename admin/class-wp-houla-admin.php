@@ -421,10 +421,11 @@ class Wp_Houla_Admin {
         $state = array(
             'state'   => 'running',
             'total'   => $total,
-            'synced'  => 0,
-            'errors'  => 0,
-            'page'    => 1,
-            'started' => time(),
+            'synced'    => 0,
+            'errors'    => 0,
+            'withdrawn' => 0,
+            'page'      => 1,
+            'started'   => time(),
         );
         set_transient( 'wphoula_bg_sync_status', $state, HOUR_IN_SECONDS );
 
@@ -525,9 +526,11 @@ class Wp_Houla_Admin {
             }
 
             // Update running totals
-            $status['synced'] += $result['synced'];
-            $status['errors'] += $result['errors'];
-            $status['page']    = $page;
+            $status['synced']   += $result['synced'];
+            $status['errors']   += $result['errors'];
+            $status['withdrawn'] = ( isset( $status['withdrawn'] ) ? (int) $status['withdrawn'] : 0 )
+                + ( isset( $result['withdrawn'] ) ? (int) $result['withdrawn'] : 0 );
+            $status['page']      = $page;
 
             // Connection error after all retries — abort
             if ( ! empty( $result['connection_error'] ) ) {
@@ -592,6 +595,36 @@ class Wp_Houla_Admin {
         }
 
         wp_send_json_success( $status );
+    }
+
+    /**
+     * AJAX: products the seller deleted on Hou.la (count, and how many the
+     * « Les remettre sur Hou.la » button would send).
+     */
+    public function ajax_withdrawn_status() {
+        check_ajax_referer( 'wphoula_admin', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
+
+        $sync = new Wp_Houla_Sync();
+        wp_send_json_success( $sync->count_withdrawn_products() );
+    }
+
+    /**
+     * AJAX: « Les remettre sur Hou.la », one chunk per call (the page calls
+     * again while products remain). The seller confirmed in the page first.
+     */
+    public function ajax_restore_withdrawn() {
+        check_ajax_referer( 'wphoula_admin', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
+        }
+
+        $sync = new Wp_Houla_Sync();
+        wp_send_json_success( $sync->restore_withdrawn_products( 20 ) );
     }
 
     /**

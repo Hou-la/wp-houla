@@ -69,6 +69,28 @@ class OptionsTest extends TestCase {
         $this->assertEquals( 'test@example.com', $options->get( 'user_email' ) );
     }
 
+    /**
+     * Banc du 2026-11-09 : une synchro longue (une seule requête, jusqu'à
+     * 30 min) écrivait à la fin TOUT le tableau lu à son démarrage ; le filtre
+     * de catégories enregistré pendant ce temps était annulé.
+     */
+    public function test_set_keeps_the_settings_saved_by_another_request(): void {
+        $db = array( 'sync_categories' => array( 727 ), 'products_synced' => 3 );
+        Functions\when( 'get_option' )->alias( function () use ( &$db ) { return $db; } );
+        $written = null;
+        Functions\when( 'update_option' )->alias( function ( $name, $value ) use ( &$written ) {
+            $written = $value;
+            return true;
+        } );
+
+        $sync_request = new \Wp_Houla_Options();          // la synchro démarre
+        $db['sync_categories'] = array( 906 );              // la vendeuse enregistre un autre filtre
+        $sync_request->set( 'products_synced', 600 );       // la synchro finit
+
+        $this->assertSame( array( 906 ), $written['sync_categories'] );
+        $this->assertSame( 600, $written['products_synced'] );
+    }
+
     public function test_delete_all_removes_options(): void {
         Functions\expect( 'delete_option' )
             ->once()

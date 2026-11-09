@@ -47,6 +47,8 @@ abstract class TestCase extends PHPUnitTestCase {
             'get_post'          => function ( $post = null ) { return null; },
             'wp_redirect'       => function ( $location, $status = 302 ) { return true; },
             'wp_die'            => function ( $message = '' ) { return; },
+            // Options::save() drops the request cache before re-reading (1.6.9).
+            'wp_cache_delete'   => function ( $key, $group = '' ) { return true; },
         ] );
     }
 

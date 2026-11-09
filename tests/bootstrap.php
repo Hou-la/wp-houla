@@ -108,6 +108,25 @@ if ( ! class_exists( 'WP_REST_Server' ) ) {
     }
 }
 
+if ( ! class_exists( 'WC_Order_Item_Product' ) ) {
+    /** Ligne produit d'une commande : ce que lit le suivi du stock (1.6.9). */
+    class WC_Order_Item_Product {
+        private $product;
+        private $qty;
+        private $meta = array();
+        public function __construct( $product = null, $qty = 1 ) { $this->product = $product; $this->qty = $qty; }
+        public function get_product() { return $this->product; }
+        public function get_product_id() { return $this->product ? $this->product->get_id() : 0; }
+        public function get_variation_id() { return 0; }
+        public function get_quantity() { return $this->qty; }
+        public function get_meta( $key, $single = true ) { return $this->meta[ $key ] ?? ''; }
+        public function update_meta_data( $key, $value ) { $this->meta[ $key ] = $value; }
+        public function add_meta_data( $key, $value, $unique = false ) { $this->meta[ $key ] = $value; }
+        public function delete_meta_data( $key ) { unset( $this->meta[ $key ] ); }
+        public function save() {}
+    }
+}
+
 if ( ! class_exists( 'WC_Order_Item_Fee' ) ) {
     /**
      * Minimal WooCommerce WC_Order_Item_Fee mock for tests.

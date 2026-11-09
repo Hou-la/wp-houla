@@ -545,7 +545,7 @@
                 return;
             }
 
-            var processed = (s.synced || 0) + (s.errors || 0);
+            var processed = (s.synced || 0) + (s.errors || 0) + (s.withdrawn || 0);
             var total = s.total || 1;
             var pct = Math.min(100, Math.round(processed / total * 100));
 
@@ -567,7 +567,11 @@
                 if (s.errors > 0) {
                     summary += ', <span style="color:#d63638;">' + s.errors + ' erreur' + (s.errors > 1 ? 's' : '') + '</span>';
                 }
+                if (s.withdrawn > 0) {
+                    summary += ', <span style="color:#dba617;">' + s.withdrawn + ' supprimé' + (s.withdrawn > 1 ? 's' : '') + ' par vous sur Hou.la</span>';
+                }
                 $text.html(summary);
+                refreshWithdrawnNotice();
                 $btn.prop('disabled', false);
                 $cancelBtn.hide();
 
@@ -599,6 +603,88 @@
             }
         });
     }
+
+    // -----------------------------------------------------------------
+    // Produits supprimés par la vendeuse sur Hou.la (1.6.9)
+    // -----------------------------------------------------------------
+    // Hou.la ne remet plus en ligne un produit que la vendeuse a supprimé
+    // depuis Hou.la. Jusqu'à la 1.6.8, ces produits étaient comptés comme
+    // synchronisés, sans rien dire (« Les Perles de Jo », 2026-11-09).
+
+    function withdrawnSentence(n) {
+        return n > 1
+            ? n + ' produits ont été supprimés par vous sur Hou.la et ne sont plus synchronisés.'
+            : '1 produit a été supprimé par vous sur Hou.la et n\'est plus synchronisé.';
+    }
+
+    function refreshWithdrawnNotice() {
+        if (!$('#wphoula-withdrawn-notice').length) return;
+        $.post(ajaxUrl, { action: 'wphoula_withdrawn_status', nonce: nonce }, function (resp) {
+            if (!resp || !resp.success || !resp.data) return;
+            var d = resp.data;
+            var $notice = $('#wphoula-withdrawn-notice');
+            if (!d.withdrawn) {
+                $notice.hide();
+                return;
+            }
+            var text = withdrawnSentence(d.withdrawn);
+            var outside = d.withdrawn - d.restorable;
+            if (outside > 0) {
+                text += ' ' + outside + (outside > 1 ? ' sont hors' : ' est hors') +
+                    ' de vos catégories ou produits choisis : ' + (outside > 1 ? 'ils ne seront pas renvoyés.' : 'il ne sera pas renvoyé.');
+            }
+            $('#wphoula-withdrawn-text').text(text);
+            $('#wphoula-restore-withdrawn').prop('disabled', d.restorable === 0).data('restorable', d.restorable);
+            $notice.show();
+        });
+    }
+
+    $(document).on('click', '#wphoula-restore-withdrawn', function () {
+        var $btn = $(this);
+        var n = $btn.data('restorable') || 0;
+        if (!n) return;
+        var question = (n > 1 ? 'Remettre ces ' + n + ' produits sur Hou.la ?' : 'Remettre ce produit sur Hou.la ?') +
+            '\n\nVous les aviez supprimés depuis Hou.la. Ils y reviendront avec les données de WooCommerce ' +
+            '(et repasseront par la modération si leur contenu a changé).';
+        if (!window.confirm(question)) return;
+
+        var $status = $('#wphoula-restore-withdrawn-status');
+        var restored = 0;
+        $btn.prop('disabled', true);
+        $status.text('Envoi en cours...');
+
+        function round() {
+            $.post(ajaxUrl, { action: 'wphoula_restore_withdrawn', nonce: nonce }, function (resp) {
+                if (!resp || !resp.success || !resp.data) {
+                    $status.text('Erreur : ' + ((resp && resp.data) ? resp.data : 'réponse invalide'));
+                    $btn.prop('disabled', false);
+                    return;
+                }
+                var d = resp.data;
+                restored += d.restored;
+                $status.text(restored + ' produit' + (restored > 1 ? 's' : '') + ' remis sur Hou.la...');
+                // Continue tant qu'il en reste ET que le tour a avancé : un
+                // produit refusé ou en erreur ne fait pas boucler la page.
+                if (d.remaining > 0 && d.restored > 0) {
+                    round();
+                    return;
+                }
+                var msg = restored + ' produit' + (restored > 1 ? 's' : '') + ' remis sur Hou.la.';
+                if (d.errors > 0 || d.still_withdrawn > 0) {
+                    msg += ' ' + (d.errors + d.still_withdrawn) + ' non remis' +
+                        (d.error_message ? ' (' + d.error_message + ')' : '') + '.';
+                }
+                $status.text(msg);
+                $btn.prop('disabled', false);
+                refreshWithdrawnNotice();
+                loadSyncedProducts();
+            }).fail(function () {
+                $status.text(i18n.networkError || 'Erreur réseau');
+                $btn.prop('disabled', false);
+            });
+        }
+        round();
+    });
 
     // On page load: check if a background sync is already running
     function checkExistingSyncOnLoad() {
@@ -1034,6 +1120,7 @@
             loadSyncedProducts();
             loadIdentifierMetaKeys();
             checkExistingSyncOnLoad();
+            refreshWithdrawnNotice();
         }
     });
 
@@ -1046,6 +1133,7 @@
             loadSyncedProducts();
             loadIdentifierMetaKeys();
             checkExistingSyncOnLoad();
+            refreshWithdrawnNotice();
         }
 
         // Trigger price example on load if value is set
