@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.10
+Stable tag: 1.6.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,11 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.11 =
+* LE POIDS DE CHAQUE VARIATION EST ENVOYE A HOU.LA. Jusqu'ici, seul le poids de la fiche produit etait envoye : quand une meme fiche regroupait des variations de poids differents (un t-shirt, un sweat et un mug, par exemple), toutes etaient pesees au poids de la fiche, et les frais de port calcules sur ce poids. Le poids saisi sur une variation dans WooCommerce est maintenant envoye a Hou.la, converti comme celui de la fiche (grammes, livres et onces deviennent des kilogrammes).
+* Une variation sans poids propre garde le poids de la fiche produit, comme dans WooCommerce. Si vous effacez le poids d'une variation, elle reprend le poids de la fiche.
+* Modifier le poids d'une seule variation suffit a mettre la fiche a jour sur Hou.la, sans relancer de synchronisation complete.
 
 = 1.6.10 =
 * LES COMMANDES HOU.LA PEUVENT ETRE RATTACHEES AU COMPTE DE VOS CLIENTES DEJA INSCRITES. Jusqu'ici, toute commande venue de Hou.la arrivait en commande « Invite » : elle n'apparaissait pas dans l'espace « Mon compte » de votre cliente, et la liste Clients de WooCommerce affichait une autre fiche, ou remplacait son nom par celui de la commande Hou.la. Un nouveau reglage, dans l'onglet Commandes, rattache la commande au compte client qui a le meme e-mail (sans tenir compte des majuscules ni des espaces). Il est desactive par defaut.
