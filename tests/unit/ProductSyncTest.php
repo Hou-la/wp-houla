@@ -332,6 +332,168 @@ class ProductSyncTest extends TestCase {
         $this->assertSame( 'kg', $data['weight_unit'] );
     }
 
+    // ── Weight of each variation (1.6.11, Trello #151) ──────────────────
+
+    /** Fiche variable pour format_product (le poids de la fiche est celui du t-shirt). */
+    private function makeVariableProduct( $id, $weight, array $children ) {
+        return new class( $id, $weight, $children ) {
+            private $id;
+            private $weight;
+            private $children;
+            public function __construct( $id, $weight, $children ) { $this->id = $id; $this->weight = $weight; $this->children = $children; }
+            public function get_id() { return $this->id; }
+            public function get_weight( $context = 'view' ) { return $this->weight; }
+            public function get_type() { return 'variable'; }
+            public function is_type( $t ) { return 'variable' === $t; }
+            public function get_children() { return $this->children; }
+            public function get_name() { return 'T-shirt et sweat Giamory'; }
+            public function get_status() { return 'publish'; }
+            public function __call( $name, $args ) {
+                if ( in_array( $name, array( 'get_gallery_image_ids', 'get_attributes' ), true ) ) {
+                    return array();
+                }
+                return strpos( $name, 'is_' ) === 0 ? false : '';
+            }
+        };
+    }
+
+    /**
+     * Variation telle que WooCommerce la rend : get_weight() (« view ») retombe
+     * sur le poids de la fiche quand la variation n'en a pas, get_weight( 'edit' )
+     * rend le poids saisi sur la variation elle-même.
+     */
+    private function makeWeighedVariation( $id, $own_weight, $parent_weight ) {
+        return new class( $id, $own_weight, $parent_weight ) {
+            private $id;
+            private $own;
+            private $parent;
+            public function __construct( $id, $own, $parent ) { $this->id = $id; $this->own = $own; $this->parent = $parent; }
+            public function get_id() { return $this->id; }
+            public function get_weight( $context = 'view' ) {
+                if ( 'edit' === $context || '' !== (string) $this->own ) {
+                    return $this->own;
+                }
+                return $this->parent;
+            }
+            public function get_attributes() { return array(); }
+            public function __call( $name, $args ) { return ''; }
+        };
+    }
+
+    /**
+     * Charge utile d'une fiche variable.
+     *
+     * @param string $unit          woocommerce_weight_unit.
+     * @param string $parent_weight Poids de la fiche, dans l'unité de la boutique.
+     * @param array  $own_weights   Poids PROPRE de chaque variation ('' = aucun), par identifiant.
+     * @return array<int, array> variations de la charge utile, par identifiant.
+     */
+    private function variationsPayload( $unit, $parent_weight, array $own_weights ) {
+        $sync = $this->makeSync( array() );
+        Functions\when( 'get_option' )->alias( function ( $key ) use ( $unit ) {
+            return 'woocommerce_weight_unit' === $key ? $unit : '';
+        } );
+        $children = array();
+        foreach ( $own_weights as $id => $own ) {
+            $children[ $id ] = $this->makeWeighedVariation( $id, $own, $parent_weight );
+        }
+        Functions\when( 'wc_get_product' )->alias( function ( $id ) use ( $children ) {
+            return $children[ $id ] ?? false;
+        } );
+
+        $data = $this->callPrivate(
+            $sync,
+            'format_product',
+            $this->makeVariableProduct( 1600, $parent_weight, array_keys( $children ) )
+        );
+
+        return array_column( $data['variations'], null, 'id' );
+    }
+
+    /**
+     * Le sweat (620 g) rangé sous la fiche d'un t-shirt (180 g) : jusqu'à la
+     * 1.6.10 le poids des variations n'était pas envoyé, le sweat était expédié
+     * au tarif de 180 g.
+     */
+    public function test_variation_payload_carries_its_own_weight_in_kilograms() {
+        $rows = $this->variationsPayload( 'g', '180', array( 1601 => '180', 1602 => '620' ) );
+
+        // Un NOMBRE, en kilogrammes : l'API ignore un poids de variation en chaîne.
+        $this->assertSame( 0.18, $rows[1601]['weight'] );
+        $this->assertSame( 0.62, $rows[1602]['weight'] );
+    }
+
+    /**
+     * Variation sans poids : pas de clé `weight`, Hou.la retombe sur la fiche.
+     * Envoyer le poids hérité (get_weight() le rend) recopierait 180 g sur chaque
+     * variation et rouvrirait la modération de toutes les fiches variables.
+     */
+    public function test_variation_without_own_weight_sends_no_weight() {
+        $rows = $this->variationsPayload( 'g', '180', array( 1602 => '620', 1603 => '' ) );
+
+        $this->assertArrayNotHasKey( 'weight', $rows[1603] );
+        $this->assertSame( 0.62, $rows[1602]['weight'] );
+    }
+
+    /** Un poids nul ou illisible n'est pas un poids : la fiche fait foi. */
+    public function test_variation_with_zero_or_unreadable_weight_sends_no_weight() {
+        $rows = $this->variationsPayload( 'g', '180', array( 1604 => '0', 1605 => 'abc', 1606 => '-5', 1607 => null ) );
+
+        foreach ( array( 1604, 1605, 1606, 1607 ) as $id ) {
+            $this->assertArrayNotHasKey( 'weight', $rows[ $id ], "variation $id" );
+        }
+    }
+
+    /** Boutique en kg : la valeur saisie, en nombre (virgule décimale comprise). */
+    public function test_variation_weight_of_a_kilogram_store_is_sent_as_a_number() {
+        $rows = $this->variationsPayload( 'kg', '0.18', array( 1601 => '0.50', 1602 => '0,62' ) );
+
+        $this->assertSame( 0.5, $rows[1601]['weight'] );
+        $this->assertSame( 0.62, $rows[1602]['weight'] );
+    }
+
+    /** Livres et onces : la même conversion que le poids de la fiche (weight_to_kg). */
+    public function test_variation_weight_in_pounds_and_ounces_uses_the_product_conversion() {
+        $livres = $this->variationsPayload( 'lbs', '1', array( 1601 => '1' ) );
+        $onces  = $this->variationsPayload( 'oz', '1', array( 1601 => '8' ) );
+
+        $this->assertSame( (float) \Wp_Houla_Sync::weight_to_kg( '1', 'lbs' ), $livres[1601]['weight'] );
+        $this->assertSame( 0.453592, $livres[1601]['weight'] );
+        $this->assertSame( 0.226796, $onces[1601]['weight'] );
+    }
+
+    /** Contre-témoin : le reste de la ligne de variation ne bouge pas. */
+    public function test_variation_payload_keeps_its_other_fields() {
+        $rows = $this->variationsPayload( 'g', '180', array( 1603 => '' ) );
+
+        $this->assertSame(
+            array( 'id', 'sku', 'price', 'regular_price', 'sale_price', 'stock_quantity', 'stock_status', 'attributes', 'image' ),
+            array_keys( $rows[1603] )
+        );
+    }
+
+    /** Le poids de la FICHE reste envoyé comme avant (chaîne en kg), variations ou non. */
+    public function test_variable_product_payload_keeps_the_product_weight() {
+        $sync = $this->makeSync( array() );
+        Functions\when( 'get_option' )->alias( function ( $key ) {
+            return 'woocommerce_weight_unit' === $key ? 'g' : '';
+        } );
+        Functions\when( 'wc_get_product' )->justReturn( false );
+
+        $data = $this->callPrivate( $sync, 'format_product', $this->makeVariableProduct( 1600, '180', array() ) );
+
+        $this->assertSame( '0.18', $data['weight'] );
+        $this->assertSame( 'kg', $data['weight_unit'] );
+        $this->assertSame( array(), $data['variations'] );
+    }
+
+    /** La charge utile part en JSON : le poids y est un nombre, pas une chaîne. */
+    public function test_variation_weight_is_a_json_number() {
+        $rows = $this->variationsPayload( 'g', '180', array( 1602 => '620' ) );
+
+        $this->assertSame( '{"weight":0.62}', json_encode( array( 'weight' => $rows[1602]['weight'] ) ) );
+    }
+
     /** Contre-témoin : sans lien Hou.la, le filtre garde la porte d'entrée. */
     public function test_new_product_outside_the_filter_is_not_synced() {
         $sync = $this->makeSync( array( 'sync_categories' => array( 727 ) ) );

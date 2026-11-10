@@ -1274,6 +1274,34 @@ class Wp_Houla_Sync {
         return rtrim( rtrim( number_format( $kg, 6, '.', '' ), '0' ), '.' );
     }
 
+    /**
+     * OWN weight of a variation, in kilograms, as a NUMBER (1.6.11).
+     *
+     * Hou.la reads `variations[].weight` as a number, in the product's
+     * `weight_unit` (always 'kg', see format_product): the conversion is the
+     * product's, weight_to_kg, never a second table of factors.
+     *
+     * `get_weight( 'edit' )` is the value typed on the variation itself;
+     * `get_weight()` ('view') would return the parent's weight for a variation
+     * that has none. Sending that inherited value would copy the product's
+     * weight onto every variation: Hou.la already inherits it, and its content
+     * fingerprint counts each variation's weight, so every variable product of
+     * every store would be moderated again. A variation without a weight of
+     * its own therefore sends NO `weight` key.
+     *
+     * @param WC_Product_Variation $variation Variation.
+     * @param string               $unit      woocommerce_weight_unit.
+     * @return float|null Weight in kg, null when the variation has none.
+     */
+    public static function variation_weight_kg( $variation, $unit ) {
+        $kg = self::weight_to_kg( $variation->get_weight( 'edit' ), $unit );
+        if ( '' === $kg ) {
+            return null;
+        }
+        $kg = (float) str_replace( ',', '.', $kg );
+        return $kg > 0 ? $kg : null;
+    }
+
     private function format_product( $product ) {
         $data = array(
             'external_id'     => (string) $product->get_id(),
@@ -1381,7 +1409,7 @@ class Wp_Houla_Sync {
                 if ( ! $variation ) {
                     continue;
                 }
-                $variations[] = array(
+                $row = array(
                     'id'             => $variation_id,
                     'sku'            => $variation->get_sku(),
                     'price'          => (float) $variation->get_price(),
@@ -1392,6 +1420,15 @@ class Wp_Houla_Sync {
                     'attributes'     => $variation->get_attributes(),
                     'image'          => wp_get_attachment_url( $variation->get_image_id() ) ?: null,
                 );
+                // Weight of the variation (1.6.11). Until 1.6.10 it was never
+                // sent: a sweatshirt filed under a T-shirt product shipped at
+                // the T-shirt's weight. Only a variation with its OWN weight
+                // carries the key; the others inherit the product's on Hou.la.
+                $variation_weight = self::variation_weight_kg( $variation, get_option( 'woocommerce_weight_unit' ) );
+                if ( null !== $variation_weight ) {
+                    $row['weight'] = $variation_weight;
+                }
+                $variations[] = $row;
             }
             $data['variations'] = $variations;
         }

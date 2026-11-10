@@ -310,6 +310,8 @@ Three modes:
 
 **Weight unit:** the weight is sent in kilograms (`weight` + `weight_unit: kg`), converted from `woocommerce_weight_unit` (g, lbs, oz). A kg store sends its raw value unchanged. Until 1.6.7 the store unit was sent as is and read as kg (75 g became 75 kg).
 
+**Weight of each variation (1.6.11):** a variation that has its OWN weight (`get_weight( 'edit' )`) sends it as `variations[].weight`, a NUMBER of kilograms converted by the same `Wp_Houla_Sync::weight_to_kg()` as the product weight (`Wp_Houla_Sync::variation_weight_kg()`, no second table of factors). A variation without its own weight, or with a null or unreadable one, sends NO `weight` key: Hou.la then falls back on the product weight, as WooCommerce does, and the moderation fingerprint of such a product does not move. Clearing the weight of a variation therefore brings it back to the product weight on the next sync. No extra hook is needed: saving a variation makes WooCommerce save its parent at `shutdown` (`wc_deferred_product_sync`), which fires `woocommerce_update_product` and the usual PATCH (bench fsn2, 2026-11-11, WooCommerce 11.2.2: CRUD save of one variation, « Save changes » of the variations panel, REST `PUT /wc/v3/products/{id}/variations/{id}` and the bulk action « Set weight » each re-sent the product with the right weight per variation). Until 1.6.10 the weight of a variation was never sent: every variation was weighed as the product.
+
 **Synced data:**
 
 | Field | Description |
@@ -326,7 +328,7 @@ Three modes:
 | Weight | Product weight |
 | Dimensions | Length, width, height |
 | Stock | Quantity + status |
-| Variations | Price, image, SKU, stock, attributes |
+| Variations | Price, image, SKU, stock, attributes, own weight |
 | Attributes | Visible attributes |
 
 ### Order Reception
