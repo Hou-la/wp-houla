@@ -54,6 +54,7 @@ class Wp_Houla {
         require_once $base . 'class-wp-houla-api.php';
         require_once $base . 'class-wp-houla-sync.php';
         require_once $base . 'class-wp-houla-orders.php';
+        require_once $base . 'class-wp-houla-refund-notice.php';
         require_once $base . 'class-wp-houla-new-order-push.php';
         require_once $base . 'class-wp-houla-webhook.php';
         require_once $base . 'class-wp-houla-metabox.php';
@@ -262,6 +263,12 @@ class Wp_Houla {
 
         // Order status changes (WC → Hou.la)
         $this->loader->add_action( 'woocommerce_order_status_changed', $sync, 'on_order_status_changed', 10, 4 );
+
+        // Remboursement saisi dans WooCommerce sur une commande Hou.la (Trello
+        // #157) : il ne rend aucun argent. La vendeuse est prévenue (note,
+        // encart) et Hou.la le garde dans l'historique, sans toucher à l'argent.
+        $refund_notice = new Wp_Houla_Refund_Notice();
+        $this->loader->add_action( 'woocommerce_order_refunded', $refund_notice, 'on_order_refunded', 10, 2 );
 
         // Pas de fausse « nouvelle commande » dans l'app WooCommerce à la
         // livraison d'une vieille commande. Priorité 5 : avant le déclencheur

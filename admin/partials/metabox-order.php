@@ -10,6 +10,7 @@
  *   $houla_order_id - string Hou.la order UUID (or empty)
  *   $has_label      - bool   Whether a label exists (cached)
  *   $nonce          - string wphoula_order_metabox nonce
+ *   $refund_notice_html - string Encart remboursement (Trello #157), déjà échappé
  *
  * @since      1.5.0
  * @package    Wp_Houla
@@ -40,6 +41,14 @@ if ( ! defined( 'ABSPATH' ) ) {
             <span class="dashicons dashicons-yes-alt" style="color:#22c55e;"></span>
             <?php esc_html_e( 'Synced with Hou.la', 'wp-houla' ); ?>
         </p>
+
+        <?php
+        // Encart « un remboursement saisi ici ne rend pas d'argent » (Trello
+        // #157). HTML échappé par Wp_Houla_Refund_Notice::render().
+        if ( ! empty( $refund_notice_html ) ) {
+            echo $refund_notice_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        }
+        ?>
 
         <?php if ( ! empty( $buyer_name ) || ! empty( $buyer_avatar ) ) : ?>
         <!-- Buyer Hou.la workspace identity -->

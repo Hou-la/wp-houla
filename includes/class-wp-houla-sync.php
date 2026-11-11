@@ -1696,9 +1696,12 @@ class Wp_Houla_Sync {
             return;
         }
 
-        // Prevent infinite loop: skip if this change came from a Hou.la webhook
+        // Prevent infinite loop: skip if this change came from a Hou.la webhook.
+        // Le drapeau en mémoire couvre le passage automatique à « Remboursée »
+        // que WooCommerce fait PENDANT wc_create_refund(), sur une commande
+        // qu'il relit sans la méta (Trello #157).
         $skip = $order->get_meta( '_houla_skip_sync' );
-        if ( $skip === '1' ) {
+        if ( $skip === '1' || Wp_Houla_Refund_Notice::$applying_houla_refund ) {
             $this->log( 'Order #' . $order_id . ' status change skipped (from Hou.la webhook).' );
             return;
         }
@@ -1792,6 +1795,15 @@ class Wp_Houla_Sync {
             $order->delete_meta_data( '_houla_sync_error' );
             $order->save();
             $this->log( 'Order #' . $order_id . ' status synced to Hou.la: ' . $new_status . ' → ' . $houla_status . '.' );
+
+            // « Remboursée » posé dans WooCommerce sans que Hou.la ait rendu
+            // l'argent : Hou.la ne change plus rien (Trello #157), la vendeuse
+            // est prévenue ici. Une API d'avant #157 n'envoie pas
+            // `refund` : rien n'est affiché.
+            if ( 'refunded' === $houla_status && is_array( $result ) && isset( $result['refund'] ) ) {
+                $notice = new Wp_Houla_Refund_Notice( $this->api, $this->auth );
+                $notice->on_refunded_status_without_money( $order, $result['refund'] );
+            }
         }
     }
 

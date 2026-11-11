@@ -653,17 +653,32 @@ class Wp_Houla_Orders {
             }
         }
 
-        // Create the refund
-        $refund = wc_create_refund( array(
-            'amount'         => $refund_amount,
-            'reason'         => $reason,
-            'order_id'       => $order_id,
-            'refund_payment' => false, // Payment was already refunded on Stripe side
-            'restock_items'  => $restock,
-        ) );
+        // ⚠️ ÉCHO (Trello #157). wc_create_refund() passe lui-même une commande
+        // remboursée en totalité à « Remboursée », sur une commande qu'il
+        // relit, et déclenche woocommerce_order_refunded avant que le
+        // remboursement porte `_houla_refund_id`. Sans ces deux marques, ce
+        // remboursement venu de Hou.la repartait vers Hou.la (`wc_status=
+        // refunded`) et était signalé à la vendeuse comme « sans argent ».
+        $order->update_meta_data( '_houla_skip_sync', '1' );
+        $order->save();
+        Wp_Houla_Refund_Notice::$applying_houla_refund = true;
+        try {
+            // Create the refund
+            $refund = wc_create_refund( array(
+                'amount'         => $refund_amount,
+                'reason'         => $reason,
+                'order_id'       => $order_id,
+                'refund_payment' => false, // Payment was already refunded on Stripe side
+                'restock_items'  => $restock,
+            ) );
+        } finally {
+            Wp_Houla_Refund_Notice::$applying_houla_refund = false;
+        }
 
         if ( is_wp_error( $refund ) ) {
             $this->log( 'Refund failed for WC #' . $order_id . ': ' . $refund->get_error_message() );
+            $order->delete_meta_data( '_houla_skip_sync' );
+            $order->save_meta_data();
             return $refund;
         }
 
@@ -679,7 +694,9 @@ class Wp_Houla_Orders {
             $this->restock_items( $order, $data['items'] );
         }
 
-        // Only set status to refunded if full refund (amount >= order total)
+        // Only set status to refunded if full refund (amount >= order total).
+        // La méta `_houla_skip_sync` est encore posée : ce passage ne repart
+        // pas vers Hou.la ; elle est retirée juste après.
         if ( $refund_amount >= floatval( $order->get_total() ) ) {
             $order->set_status( 'refunded', $reason );
         } else {
@@ -690,6 +707,8 @@ class Wp_Houla_Orders {
             ) );
         }
         $order->save();
+        $order->delete_meta_data( '_houla_skip_sync' );
+        $order->save_meta_data();
 
         $this->log( 'Order WC #' . $order_id . ' refunded ' . $refund_amount . ' ' . ( isset( $data['currency'] ) ? $data['currency'] : '' ) . ' (Hou.la ' . $data['houla_order_id'] . ').' );
 

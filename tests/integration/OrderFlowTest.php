@@ -13,6 +13,7 @@ use Brain\Monkey\Functions;
 
 require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-options.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-orders.php';
+require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-refund-notice.php';
 
 /**
  * Minimal mock for WC_Order.
@@ -382,6 +383,35 @@ class OrderFlowTest extends TestCase {
         $this->assertIsArray( $result );
         $this->assertEquals( 100, $result['order_id'] );
         $this->assertEquals( 'refunded', $mockOrder->get_status() );
+    }
+
+    /**
+     * Trello #157 : un remboursement venu de Hou.la ne repart pas vers Hou.la.
+     * wc_create_refund() passe la commande à « Remboursée » et déclenche
+     * woocommerce_order_refunded AVANT que le remboursement porte
+     * `_houla_refund_id` : la méta anti-boucle (enregistrée) et le drapeau en
+     * mémoire doivent être posés pendant l'appel, et retirés après.
+     */
+    public function test_refund_from_houla_is_not_echoed_back_to_houla(): void {
+        $mockOrder  = new MockWcOrder();
+        $mockRefund = (object) array( 'id' => 10 );
+        $seen       = array();
+
+        Functions\when( 'wc_get_orders' )->justReturn( array( 100 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $mockOrder );
+        Functions\when( 'wc_create_refund' )->alias( function () use ( $mockOrder, $mockRefund, &$seen ) {
+            $seen = array(
+                'skip' => $mockOrder->get_meta( '_houla_skip_sync' ),
+                'flag' => \Wp_Houla_Refund_Notice::$applying_houla_refund,
+            );
+            return $mockRefund;
+        } );
+
+        ( new \Wp_Houla_Orders() )->refund_order( array( 'houla_order_id' => 'houla-order-001' ) );
+
+        $this->assertSame( array( 'skip' => '1', 'flag' => true ), $seen );
+        $this->assertFalse( \Wp_Houla_Refund_Notice::$applying_houla_refund );
+        $this->assertSame( '', $mockOrder->get_meta( '_houla_skip_sync' ) );
     }
 
     // =====================================================================

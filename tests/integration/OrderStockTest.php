@@ -19,6 +19,7 @@ use Brain\Monkey\Functions;
 
 require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-options.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-orders.php';
+require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-refund-notice.php';
 
 /** Produit dont le stock est géré. */
 class StockProduct {

@@ -422,6 +422,9 @@ class Wp_Houla_Order_Metabox {
         $buyer_handle   = $order->get_meta( '_houla_buyer_handle' );
         $buyer_avatar   = $order->get_meta( '_houla_buyer_avatar' );
 
+        // Un remboursement saisi dans WooCommerce ne rend pas d'argent (Trello #157).
+        $refund_notice_html = ( new Wp_Houla_Refund_Notice( $this->api, $this->auth ) )->render( $order );
+
         include plugin_dir_path( dirname( __FILE__ ) ) . 'admin/partials/metabox-order.php';
     }
 }
