@@ -204,9 +204,10 @@ class Wp_Houla_Pay_Refunds {
             $body['reason'] = function_exists( 'mb_substr' ) ? mb_substr( $reason, 0, 500 ) : substr( $reason, 0, 500 );
         }
 
-        $api    = $this->api;
-        $result = $this->orders->with_order_lock( $houla_order_id, function () use ( $api, $houla_order_id, $body, $refund ) {
-            $response = $api->post( '/ecommerce/orders/' . rawurlencode( $houla_order_id ) . '/refund', $body );
+        $api       = $this->api;
+        $overrides = $this->workspace_overrides( $order );
+        $result    = $this->orders->with_order_lock( $houla_order_id, function () use ( $api, $houla_order_id, $body, $refund, $overrides ) {
+            $response = $api->post( '/ecommerce/orders/' . rawurlencode( $houla_order_id ) . '/refund', $body, $overrides );
             if ( is_wp_error( $response ) ) {
                 return $response;
             }
@@ -265,6 +266,43 @@ class Wp_Houla_Pay_Refunds {
             return null; // Déjà rattaché à une demande Hou.la.
         }
         return $refund;
+    }
+
+    /**
+     * Clé de l'espace Hou.la de la commande. Des catégories peuvent être
+     * synchronisées vers un AUTRE espace, avec sa propre clé
+     * (`category_workspace_map`, produit marqué `_wphoula_workspace_id`) :
+     * leurs commandes appartiennent à cet espace, et Hou.la n'accepte un
+     * remboursement qu'avec la clé de l'espace de la commande. Sans
+     * correspondance : la clé principale.
+     *
+     * @param object $order Commande WooCommerce.
+     * @return array Overrides de Wp_Houla_Api (api_key, workspace_id), ou vide.
+     */
+    private function workspace_overrides( $order ) {
+        if ( ! method_exists( $order, 'get_items' ) || ! function_exists( 'get_post_meta' ) ) {
+            return array();
+        }
+        $map = ( new Wp_Houla_Options() )->get( 'category_workspace_map' );
+        if ( ! is_array( $map ) || empty( $map ) ) {
+            return array();
+        }
+        foreach ( $order->get_items( 'line_item' ) as $item ) {
+            $product_id = method_exists( $item, 'get_product_id' ) ? (int) $item->get_product_id() : 0;
+            $workspace  = $product_id > 0 ? (string) get_post_meta( $product_id, '_wphoula_workspace_id', true ) : '';
+            if ( '' === $workspace ) {
+                continue;
+            }
+            foreach ( $map as $entry ) {
+                if ( isset( $entry['workspace_id'] ) && $entry['workspace_id'] === $workspace && ! empty( $entry['api_key'] ) ) {
+                    $key = Wp_Houla_Options::decrypt( $entry['api_key'] );
+                    if ( $key ) {
+                        return array( 'api_key' => $key, 'workspace_id' => $workspace );
+                    }
+                }
+            }
+        }
+        return array();
     }
 
     /**

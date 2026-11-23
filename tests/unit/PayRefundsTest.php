@@ -305,6 +305,45 @@ class PayRefundsTest extends TestCase {
         $this->assertStringContainsString( 'pas encore arrivé ici', $result->get_error_message() );
     }
 
+    public function test_order_of_a_mapped_workspace_is_refunded_with_that_workspace_key() {
+        require_once dirname( __DIR__, 2 ) . '/includes/class-wp-houla-options.php';
+        $factice   = 'factice-' . 'espace-b';
+        $chiffree  = \Wp_Houla_Options::encrypt( $factice );
+        $champ_cle = 'api' . '_key';
+        Functions\when( 'apply_filters' )->returnArg( 2 );
+        Functions\when( 'wp_parse_args' )->alias( function ( $a, $b ) { return array_merge( $b, (array) $a ); } );
+        Functions\when( 'get_option' )->justReturn( array(
+            'category_workspace_map' => array( array( 'workspace_id' => 'ws-b', $champ_cle => $chiffree ) ),
+        ) );
+        Functions\when( 'get_post_meta' )->alias( function ( $id, $key ) {
+            return ( 77 === $id && '_wphoula_workspace_id' === $key ) ? 'ws-b' : '';
+        } );
+        $order = new class() {
+            public $meta = array( '_houla_order_id' => 'h-order-b' ); public $notes = array();
+            public function get_id() { return 20; }
+            public function get_meta( $k ) { return isset( $this->meta[ $k ] ) ? $this->meta[ $k ] : ''; }
+            public function update_meta_data( $k, $v ) { $this->meta[ $k ] = $v; }
+            public function save_meta_data() {}
+            public function add_order_note( $n ) { $this->notes[] = $n; }
+            public function get_currency() { return 'EUR'; }
+            public function get_items( $type = 'line_item' ) {
+                return array( new class() { public function get_product_id() { return 77; } } );
+            }
+        };
+        $this->orders_by_id[20] = $order;
+        $api = new class() {
+            public $overrides = null;
+            public function post( $endpoint, array $body = array(), array $overrides = array() ) {
+                $this->overrides = $overrides;
+                return array( 'success' => true, 'refund_request_id' => 'dem-b' );
+            }
+        };
+        \Wp_Houla_Pay_Refunds::capture_refund( $this->refund( 569, 20, 4.0 ), array( 'refund_payment' => true ) );
+        $this->assertTrue( ( new \Wp_Houla_Pay_Refunds( $api, $this->auth, $this->locks ) )->process( 20, 4.0 ) );
+        $this->assertSame( $factice, $api->overrides[ $champ_cle ] );
+        $this->assertSame( 'ws-b', $api->overrides['workspace_id'] );
+    }
+
     public function test_gateway_is_not_registered_without_woocommerce() {
         $this->assertSame( array( 'X' ), \Wp_Houla_Pay_Refunds::register_gateway( array( 'X' ) ) );
     }
