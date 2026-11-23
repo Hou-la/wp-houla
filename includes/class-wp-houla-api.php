@@ -246,7 +246,13 @@ class Wp_Houla_Api {
         if ( $status_code >= 400 ) {
             $msg = isset( $body_json['message'] ) ? $body_json['message'] : 'HTTP ' . $status_code;
             $this->log( $method . ' ' . $endpoint . ' error: ' . $msg );
-            return new WP_Error( 'wphoula_api_error', $msg, array( 'status' => $status_code ) );
+            // `code` et `body` (1.6.12, Trello #324) : le remboursement par
+            // Hou.la Pay affiche un message précis selon le code d'erreur.
+            return new WP_Error( 'wphoula_api_error', is_string( $msg ) ? $msg : 'HTTP ' . $status_code, array(
+                'status' => $status_code,
+                'code'   => ( is_array( $body_json ) && isset( $body_json['code'] ) && is_string( $body_json['code'] ) ) ? $body_json['code'] : '',
+                'body'   => is_array( $body_json ) ? $body_json : null,
+            ) );
         }
 
         return $body_json ?: array();

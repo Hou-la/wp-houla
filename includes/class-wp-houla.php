@@ -55,6 +55,7 @@ class Wp_Houla {
         require_once $base . 'class-wp-houla-sync.php';
         require_once $base . 'class-wp-houla-orders.php';
         require_once $base . 'class-wp-houla-refund-notice.php';
+        require_once $base . 'class-wp-houla-pay-refunds.php';
         require_once $base . 'class-wp-houla-new-order-push.php';
         require_once $base . 'class-wp-houla-webhook.php';
         require_once $base . 'class-wp-houla-metabox.php';
@@ -269,6 +270,12 @@ class Wp_Houla {
         // encart) et Hou.la le garde dans l'historique, sans toucher à l'argent.
         $refund_notice = new Wp_Houla_Refund_Notice();
         $this->loader->add_action( 'woocommerce_order_refunded', $refund_notice, 'on_order_refunded', 10, 2 );
+
+        // Passerelle « Hou.la Pay » (1.6.12, Trello #324) : bouton natif
+        // « Rembourser X € via Hou.la Pay », qui rend VRAIMENT l'argent à la
+        // cliente par Hou.la. Jamais proposée au paiement sur le site.
+        add_filter( 'woocommerce_payment_gateways', array( 'Wp_Houla_Pay_Refunds', 'register_gateway' ) );
+        add_action( 'woocommerce_create_refund', array( 'Wp_Houla_Pay_Refunds', 'capture_refund' ), 10, 2 );
 
         // Pas de fausse « nouvelle commande » dans l'app WooCommerce à la
         // livraison d'une vieille commande. Priorité 5 : avant le déclencheur

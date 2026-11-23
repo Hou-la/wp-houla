@@ -686,6 +686,9 @@ class Wp_Houla_Orders {
             $refund->update_meta_data( '_houla_refund_id', $refund_id );
             $refund->save();
         }
+        // Un remboursement Hou.la Pay à l'issue inconnue est maintenant
+        // confirmé par Hou.la : la vendeuse peut de nouveau rembourser (1.6.12).
+        $order->delete_meta_data( '_houla_pay_uncertain' );
 
         // Hou.la puts these items back in ITS stock (restoreStockForOrder) and
         // lists them in `items`. wc_create_refund() restocks nothing without
@@ -918,6 +921,32 @@ class Wp_Houla_Orders {
         }
         try {
             return $this->$method( $data );
+        } finally {
+            $this->release_lock( $key );
+        }
+    }
+
+    /**
+     * Run a callback under the same lock as the webhooks of this Hou.la order
+     * (1.6.12, Trello #324). The Hou.la Pay refund holds it while Hou.la
+     * refunds: the order.refunded webhook that Hou.la sends meanwhile waits,
+     * gets a 409 and is replayed later, when the WooCommerce refund already
+     * carries `_houla_refund_id` (it is then ignored, no second refund).
+     *
+     * @param string   $houla_order_id Hou.la order ID.
+     * @param callable $callback       Work to run under the lock.
+     * @return mixed|WP_Error WP_Error (status 409) when the lock is busy.
+     */
+    public function with_order_lock( $houla_order_id, $callback ) {
+        $key = (string) $houla_order_id;
+        if ( '' === $key ) {
+            return new WP_Error( 'wphoula_order_busy', 'Missing Hou.la order ID.', array( 'status' => 400 ) );
+        }
+        if ( ! $this->acquire_lock( $key ) ) {
+            return new WP_Error( 'wphoula_order_busy', 'Order ' . $key . ' is being updated by another request, retry later.', array( 'status' => 409 ) );
+        }
+        try {
+            return call_user_func( $callback );
         } finally {
             $this->release_lock( $key );
         }
