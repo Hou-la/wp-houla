@@ -2,9 +2,11 @@
 /**
  * Remboursement saisi dans WooCommerce sur une commande Hou.la (Trello #157).
  *
- * L'extension ne déclare aucune passerelle de paiement : sur une commande
- * payée sur Hou.la, WooCommerce ne propose que le remboursement « manuel »,
- * qui ne rend AUCUN argent à la cliente. Décision du propriétaire
+ * ~~L'extension ne déclare aucune passerelle de paiement~~ (PÉRIMÉ depuis
+ * 1.6.12, Trello #324 : la passerelle « Hou.la Pay » ajoute le bouton
+ * « Rembourser X € via Hou.la Pay », qui rend vraiment l'argent, voir
+ * Wp_Houla_Pay_Refunds). Le remboursement « manuel » de WooCommerce, lui,
+ * ne rend toujours AUCUN argent à la cliente. Décision du propriétaire
  * (2026-11-11) : on ne l'ignore pas, on PRÉVIENT la vendeuse :
  *  - un encart dans la commande WooCommerce, avec le lien vers la commande
  *    dans le studio Hou.la, où le remboursement rend vraiment l'argent ;
@@ -181,7 +183,7 @@ class Wp_Houla_Refund_Notice {
                     ) ) . '</p>';
             }
         }
-        $html .= '<p>' . esc_html__( 'Commande payée sur Hou.la : un remboursement saisi ici ne rend pas d\'argent à votre cliente.', 'wp-houla' ) . '</p>';
+        $html .= '<p>' . esc_html__( 'Commande payée sur Hou.la : pour rendre l\'argent à votre cliente, utilisez le bouton « Rembourser … via Hou.la Pay ». Le bouton « Rembourser manuellement » ne lui rend rien.', 'wp-houla' ) . '</p>';
         $html .= '<p><a class="button" target="_blank" rel="noopener noreferrer" href="' . esc_url( $url ) . '">'
             . esc_html__( 'Rembourser dans le studio Hou.la', 'wp-houla' ) . '</a></p>';
         $html .= '</div>';
@@ -232,13 +234,13 @@ class Wp_Houla_Refund_Notice {
         $order->add_order_note( $amount > 0
             ? sprintf(
                 /* translators: 1: refund amount, 2: studio URL */
-                __( 'Attention : ce remboursement de %1$s a été saisi dans WooCommerce. Il ne rend AUCUN argent à votre cliente, car la commande a été payée sur Hou.la. Pour lui rendre l\'argent, remboursez la commande dans le studio Hou.la : %2$s', 'wp-houla' ),
+                __( 'Attention : ce remboursement de %1$s a été saisi dans WooCommerce. Il ne rend AUCUN argent à votre cliente, car la commande a été payée sur Hou.la. Pour lui rendre l\'argent, utilisez le bouton « Rembourser via Hou.la Pay », ou remboursez la commande dans le studio Hou.la : %2$s', 'wp-houla' ),
                 $this->format_amount( $amount, $order ),
                 $url
             )
             : sprintf(
                 /* translators: %s: studio URL */
-                __( 'Attention : la commande est passée à « Remboursée » dans WooCommerce, mais aucun argent n\'a été rendu à votre cliente, car la commande a été payée sur Hou.la. Pour lui rendre l\'argent, remboursez la commande dans le studio Hou.la : %s', 'wp-houla' ),
+                __( 'Attention : la commande est passée à « Remboursée » dans WooCommerce, mais aucun argent n\'a été rendu à votre cliente, car la commande a été payée sur Hou.la. Pour lui rendre l\'argent, utilisez le bouton « Rembourser via Hou.la Pay », ou remboursez la commande dans le studio Hou.la : %s', 'wp-houla' ),
                 $url
             ) );
         $order->save();

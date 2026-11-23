@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.11
+Stable tag: 1.6.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,15 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.12 =
+* REMBOURSEZ VOTRE CLIENTE DEPUIS WOOCOMMERCE, COMME AVEC STRIPE OU PAYPAL. Une commande Hou.la affiche maintenant le bouton « Rembourser X € via Hou.la Pay ». Il rend VRAIMENT l'argent a votre cliente, sur la carte avec laquelle elle a paye sur Hou.la, exactement comme un remboursement fait dans le studio Hou.la (notification a votre cliente, historique de la commande Hou.la).
+* Remboursement total, partiel, ou article par article : saisissez les quantites ou les montants comme d'habitude dans WooCommerce. La case « Remettre en stock » reste geree par WooCommerce, et se synchronise avec Hou.la comme tout changement de stock.
+* Si Hou.la refuse le remboursement (montant superieur a ce qui reste a rembourser, commande deja remboursee, refus de Stripe...), WooCommerce affiche la raison en francais et n'enregistre rien.
+* Si Hou.la ne repond pas a temps, le message vous demande de ne pas recommencer : le remboursement a peut-etre ete fait, et il apparaitra de lui-meme dans la commande des qu'il sera confirme. Un second remboursement de la commande est bloque pendant 15 minutes, ou jusqu'a cette confirmation.
+* Hou.la Pay n'est jamais propose comme moyen de paiement sur votre site : il sert uniquement a rembourser les commandes Hou.la.
+* Le compte Hou.la relie a la boutique doit etre le proprietaire de l'espace, ou avoir le droit « Remboursements ».
+* Le bouton « Rembourser manuellement » ne rend toujours rien a votre cliente : l'encart de la commande vous oriente vers « Rembourser via Hou.la Pay ».
 
 = 1.6.11 =
 * LE POIDS DE CHAQUE VARIATION EST ENVOYE A HOU.LA. Jusqu'ici, seul le poids de la fiche produit etait envoye : quand une meme fiche regroupait des variations de poids differents (un t-shirt, un sweat et un mug, par exemple), toutes etaient pesees au poids de la fiche, et les frais de port calcules sur ce poids. Le poids saisi sur une variation dans WooCommerce est maintenant envoye a Hou.la, converti comme celui de la fiche (grammes, livres et onces deviennent des kilogrammes).

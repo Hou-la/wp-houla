@@ -653,6 +653,29 @@ class Wp_Houla_Orders {
             }
         }
 
+        // Remboursement demandé par le bouton « Rembourser via Hou.la Pay »
+        // (1.6.12, Trello #324) dont l'appel n'a jamais fini ici (PHP tué
+        // pendant l'appel) : WooCommerce l'a déjà enregistré, sans marque. Ce
+        // webhook s'y rattache au lieu d'en créer un second. Pendant l'appel,
+        // le verrou de la commande empêche d'arriver ici.
+        $wc_refund_id = isset( $data['wc_refund_id'] ) ? absint( $data['wc_refund_id'] ) : 0;
+        if ( $wc_refund_id > 0 && '' !== $refund_id && method_exists( $order, 'get_refunds' ) ) {
+            foreach ( $order->get_refunds() as $existing ) {
+                if ( (int) $existing->get_id() !== $wc_refund_id || '' !== (string) $existing->get_meta( '_houla_refund_id' ) ) {
+                    continue;
+                }
+                if ( abs( abs( (float) $existing->get_amount() ) - $refund_amount ) > 0.005 ) {
+                    break; // Pas le même montant : on ne s'y rattache pas.
+                }
+                $existing->update_meta_data( '_houla_refund_id', $refund_id );
+                $existing->save();
+                $order->delete_meta_data( '_houla_pay_uncertain' );
+                $order->save();
+                $this->log( 'Refund ' . $refund_id . ' attached to existing WC refund #' . $wc_refund_id . ' on WC #' . $order_id . '.' );
+                return array( 'order_id' => $order_id, 'duplicate' => true, 'attached' => $wc_refund_id );
+            }
+        }
+
         // ⚠️ ÉCHO (Trello #157). wc_create_refund() passe lui-même une commande
         // remboursée en totalité à « Remboursée », sur une commande qu'il
         // relit, et déclenche woocommerce_order_refunded avant que le
@@ -686,6 +709,9 @@ class Wp_Houla_Orders {
             $refund->update_meta_data( '_houla_refund_id', $refund_id );
             $refund->save();
         }
+        // Un remboursement Hou.la Pay à l'issue inconnue est maintenant
+        // confirmé par Hou.la : la vendeuse peut de nouveau rembourser (1.6.12).
+        $order->delete_meta_data( '_houla_pay_uncertain' );
 
         // Hou.la puts these items back in ITS stock (restoreStockForOrder) and
         // lists them in `items`. wc_create_refund() restocks nothing without
@@ -918,6 +944,32 @@ class Wp_Houla_Orders {
         }
         try {
             return $this->$method( $data );
+        } finally {
+            $this->release_lock( $key );
+        }
+    }
+
+    /**
+     * Run a callback under the same lock as the webhooks of this Hou.la order
+     * (1.6.12, Trello #324). The Hou.la Pay refund holds it while Hou.la
+     * refunds: the order.refunded webhook that Hou.la sends meanwhile waits,
+     * gets a 409 and is replayed later, when the WooCommerce refund already
+     * carries `_houla_refund_id` (it is then ignored, no second refund).
+     *
+     * @param string   $houla_order_id Hou.la order ID.
+     * @param callable $callback       Work to run under the lock.
+     * @return mixed|WP_Error WP_Error (status 409) when the lock is busy.
+     */
+    public function with_order_lock( $houla_order_id, $callback ) {
+        $key = (string) $houla_order_id;
+        if ( '' === $key ) {
+            return new WP_Error( 'wphoula_order_busy', 'Missing Hou.la order ID.', array( 'status' => 400 ) );
+        }
+        if ( ! $this->acquire_lock( $key ) ) {
+            return new WP_Error( 'wphoula_order_busy', 'Order ' . $key . ' is being updated by another request, retry later.', array( 'status' => 409 ) );
+        }
+        try {
+            return call_user_func( $callback );
         } finally {
             $this->release_lock( $key );
         }
