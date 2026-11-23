@@ -653,6 +653,29 @@ class Wp_Houla_Orders {
             }
         }
 
+        // Remboursement demandé par le bouton « Rembourser via Hou.la Pay »
+        // (1.6.12, Trello #324) dont l'appel n'a jamais fini ici (PHP tué
+        // pendant l'appel) : WooCommerce l'a déjà enregistré, sans marque. Ce
+        // webhook s'y rattache au lieu d'en créer un second. Pendant l'appel,
+        // le verrou de la commande empêche d'arriver ici.
+        $wc_refund_id = isset( $data['wc_refund_id'] ) ? absint( $data['wc_refund_id'] ) : 0;
+        if ( $wc_refund_id > 0 && '' !== $refund_id && method_exists( $order, 'get_refunds' ) ) {
+            foreach ( $order->get_refunds() as $existing ) {
+                if ( (int) $existing->get_id() !== $wc_refund_id || '' !== (string) $existing->get_meta( '_houla_refund_id' ) ) {
+                    continue;
+                }
+                if ( abs( abs( (float) $existing->get_amount() ) - $refund_amount ) > 0.005 ) {
+                    break; // Pas le même montant : on ne s'y rattache pas.
+                }
+                $existing->update_meta_data( '_houla_refund_id', $refund_id );
+                $existing->save();
+                $order->delete_meta_data( '_houla_pay_uncertain' );
+                $order->save();
+                $this->log( 'Refund ' . $refund_id . ' attached to existing WC refund #' . $wc_refund_id . ' on WC #' . $order_id . '.' );
+                return array( 'order_id' => $order_id, 'duplicate' => true, 'attached' => $wc_refund_id );
+            }
+        }
+
         // ⚠️ ÉCHO (Trello #157). wc_create_refund() passe lui-même une commande
         // remboursée en totalité à « Remboursée », sur une commande qu'il
         // relit, et déclenche woocommerce_order_refunded avant que le

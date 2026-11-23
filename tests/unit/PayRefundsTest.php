@@ -97,7 +97,8 @@ class PayRefundsTest extends TestCase {
 
     private function order( $id = 10, array $meta = array( '_houla_order_id' => 'h-order-1' ), array $items = array() ) {
         $order = new class( $id, $meta, $items ) {
-            public $meta; public $notes = array(); private $id; private $items;
+            public $meta; public $notes = array(); public $refunds = array(); private $id; private $items;
+            public function get_refunds() { return $this->refunds; }
             public function __construct( $id, $meta, $items ) { $this->id = $id; $this->meta = $meta; $this->items = $items; }
             public function get_id() { return $this->id; }
             public function get_meta( $key ) { return isset( $this->meta[ $key ] ) ? $this->meta[ $key ] : ''; }
@@ -262,6 +263,46 @@ class PayRefundsTest extends TestCase {
         $this->auth->connected = false;
         $this->assertInstanceOf( \WP_Error::class, $this->service()->process( 10, 8.0 ) );
         $this->assertCount( 0, $this->api->calls );
+    }
+
+    public function test_sends_what_woocommerce_already_refunded_without_the_current_refund() {
+        $order  = $this->order( 10 );
+        $before = $this->refund( 400, 10, 7.0 );
+        $refund = $this->refund( 565, 10, 5.0 );
+        $order->refunds = array( $refund, $before );
+        \Wp_Houla_Pay_Refunds::capture_refund( $refund, array( 'refund_payment' => true ) );
+        $this->assertTrue( $this->service()->process( 10, 5.0 ) );
+        $this->assertSame( 700, $this->api->calls[0][1]['wc_known_refunded_cents'] );
+    }
+
+    public function test_refusal_after_a_part_was_refunded_never_says_nothing_was_refunded() {
+        $order = $this->order( 10 );
+        \Wp_Houla_Pay_Refunds::capture_refund( $this->refund( 566, 10, 30.0 ), array( 'refund_payment' => true ) );
+        $this->api->response = new \WP_Error( 'wphoula_api_error', 'Stripe refused', array(
+            'status' => 400, 'code' => 'SHOP_REFUND_REFUSED_BY_PROVIDER', 'body' => array( 'executedCents' => 2000, 'refusedCents' => 1000 ),
+        ) );
+        $result = $this->service()->process( 10, 30.0 );
+        $this->assertStringContainsString( '20,00 €', $result->get_error_message() );
+        $this->assertStringNotContainsString( 'Rien n\'a été remboursé', $result->get_error_message() );
+        $this->assertIsArray( $order->get_meta( '_houla_pay_uncertain' ), 'un nouvel essai immédiat est bloqué' );
+        // Contre-témoin : le même refus sans part rendue dit bien « rien n'a été remboursé », sans blocage.
+        $order2 = $this->order( 11 );
+        \Wp_Houla_Pay_Refunds::capture_refund( $this->refund( 567, 11, 30.0 ), array( 'refund_payment' => true ) );
+        $this->api->response = new \WP_Error( 'wphoula_api_error', 'Stripe refused', array( 'status' => 400, 'code' => 'SHOP_REFUND_REFUSED_BY_PROVIDER', 'body' => array() ) );
+        $result2 = $this->service()->process( 11, 30.0 );
+        $this->assertStringContainsString( 'Rien n\'a été remboursé', $result2->get_error_message() );
+        $this->assertSame( '', $order2->get_meta( '_houla_pay_uncertain' ) );
+    }
+
+    public function test_unconfirmed_on_store_explains_what_houla_already_refunded() {
+        $this->order( 10 );
+        \Wp_Houla_Pay_Refunds::capture_refund( $this->refund( 568, 10, 10.0 ), array( 'refund_payment' => true ) );
+        $this->api->response = new \WP_Error( 'wphoula_api_error', 'unconfirmed', array(
+            'status' => 409, 'code' => 'SHOP_REFUND_UNCONFIRMED_ON_STORE', 'body' => array( 'houlaRefundedCents' => 1500 ),
+        ) );
+        $result = $this->service()->process( 10, 10.0 );
+        $this->assertStringContainsString( '15,00 €', $result->get_error_message() );
+        $this->assertStringContainsString( 'pas encore arrivé ici', $result->get_error_message() );
     }
 
     public function test_gateway_is_not_registered_without_woocommerce() {

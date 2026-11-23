@@ -513,6 +513,46 @@ class OrderStockTest extends TestCase {
         $this->assertSame( 2, $created );
     }
 
+    /**
+     * 1.6.12 (Trello #324) : remboursement Hou.la Pay dont l'appel n'a jamais
+     * fini ici. WooCommerce l'a enregistré sans marque : le webhook porte son
+     * numéro (wc_refund_id) et s'y rattache, sans créer de second remboursement.
+     */
+    public function test_refund_webhook_attaches_to_the_woocommerce_refund_it_names() {
+        $order = new StockOrder();
+        $order->meta   = array( '_houla_order_id' => 'HL-REF-6', '_houla_stock_v2' => '1', '_houla_pay_uncertain' => array( 'amount_cents' => 1200, 'at' => time() ) );
+        $order->status = 'processing';
+        $existing = new class() extends StockRefund {
+            public function get_id() { return 77; }
+            public function get_amount() { return 12.0; }
+        };
+        $order->refunds[] = $existing;
+        Functions\when( 'wc_get_orders' )->justReturn( array( 300 ) );
+        Functions\when( 'wc_get_order' )->justReturn( $order );
+        Functions\when( 'wc_price' )->returnArg( 1 );
+        $created = 0;
+        Functions\when( 'wc_create_refund' )->alias( function () use ( &$created ) {
+            $created++;
+            return new StockRefund();
+        } );
+
+        $result = ( new \Wp_Houla_Orders() )->refund_order( array(
+            'houla_order_id' => 'HL-REF-6', 'refund_id' => 'dem-9', 'wc_refund_id' => 77, 'refund_amount' => 12, 'restock_items' => false,
+        ) );
+
+        $this->assertSame( 0, $created );
+        $this->assertSame( 77, $result['attached'] );
+        $this->assertSame( 'dem-9', $existing->meta['_houla_refund_id'] );
+        $this->assertArrayNotHasKey( '_houla_pay_uncertain', $order->meta );
+
+        // Contre-témoin : un numéro qui ne correspond à aucun remboursement (ou
+        // un autre montant) crée bien le remboursement.
+        ( new \Wp_Houla_Orders() )->refund_order( array(
+            'houla_order_id' => 'HL-REF-6', 'refund_id' => 'dem-10', 'wc_refund_id' => 78, 'refund_amount' => 5, 'restock_items' => false,
+        ) );
+        $this->assertSame( 1, $created );
+    }
+
     public function test_refund_without_restock_moves_nothing() {
         $order = new StockOrder();
         $order->meta = array( '_houla_order_id' => 'HL-REF-2', '_houla_stock_v2' => '1' );

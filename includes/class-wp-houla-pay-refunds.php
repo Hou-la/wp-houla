@@ -176,7 +176,7 @@ class Wp_Houla_Pay_Refunds {
         if ( is_array( $uncertain ) && isset( $uncertain['at'] ) && ( time() - (int) $uncertain['at'] ) < self::UNCERTAIN_TTL ) {
             return $this->error( sprintf(
                 /* translators: 1: amount, 2: studio URL */
-                __( 'Le remboursement précédent de %1$s n'a pas encore été confirmé par Hou.la. Attendez qu'il apparaisse ici (quelques minutes) ou vérifiez dans le studio avant d'en faire un autre : %2$s. Rien n'a été remboursé cette fois.', 'wp-houla' ),
+                __( 'Le remboursement précédent de %1$s n\'a pas encore été confirmé par Hou.la. Attendez qu\'il apparaisse ici (quelques minutes) ou vérifiez dans le studio avant d\'en faire un autre : %2$s. Rien n\'a été remboursé cette fois.', 'wp-houla' ),
                 $this->format_amount( ( isset( $uncertain['amount_cents'] ) ? (int) $uncertain['amount_cents'] : 0 ) / 100, $order ),
                 ( new Wp_Houla_Refund_Notice( $this->api, $this->auth ) )->studio_url( $order )
             ) );
@@ -191,6 +191,10 @@ class Wp_Houla_Pay_Refunds {
             'wc_refund_id' => (int) $refund->get_id(),
             'amount_cents' => $amount_cents,
             'items'        => $this->refund_items( $order, $refund ),
+            // Ce que WooCommerce sait déjà remboursé, sans ce remboursement :
+            // Hou.la refuse s'il a déjà rendu plus (issue précédente pas encore
+            // arrivée ici), relecture de sécurité #324.
+            'wc_known_refunded_cents' => $this->known_refunded_cents( $order, (int) $refund->get_id() ),
         );
         if ( '' !== $currency ) {
             $body['currency'] = $currency;
@@ -264,6 +268,23 @@ class Wp_Houla_Pay_Refunds {
     }
 
     /**
+     * Total des remboursements WooCommerce de la commande, sauf celui en cours.
+     */
+    private function known_refunded_cents( $order, $current_refund_id ) {
+        $total = 0;
+        if ( ! method_exists( $order, 'get_refunds' ) ) {
+            return 0;
+        }
+        foreach ( $order->get_refunds() as $other ) {
+            if ( (int) $other->get_id() === $current_refund_id ) {
+                continue;
+            }
+            $total += (int) round( abs( (float) $other->get_amount() ) * 100 );
+        }
+        return $total;
+    }
+
+    /**
      * Lignes du remboursement : produit et variation WooCommerce de la ligne
      * d'origine, quantité, montant TTC. Hou.la ne s'en sert que pour
      * l'historique.
@@ -325,7 +346,27 @@ class Wp_Houla_Pay_Refunds {
         if ( 'wphoula_api_error' !== $error->get_error_code() && 0 === $status ) {
             return __( 'Hou.la n\'a pas répondu à temps. Le remboursement a peut-être été fait : ne le refaites pas tout de suite. S\'il a abouti, il apparaîtra ici de lui-même dans quelques minutes.', 'wp-houla' ) . $studio;
         }
+        // Refus APRÈS qu'une part a été rendue (commande payée en plusieurs
+        // fois) : jamais « rien n'a été remboursé » (relecture de sécurité #324).
+        $executed = isset( $body['executedCents'] ) ? (int) $body['executedCents'] : 0;
+        if ( $executed > 0 && 'SHOP_REFUND_PARTIALLY_EXECUTED' !== $code ) {
+            return sprintf(
+                /* translators: %s: amount actually refunded */
+                __( 'Stripe a refusé une partie du remboursement. %s ont bien été rendus à votre cliente : cette partie apparaîtra ici d\'elle-même ; le reste n\'a pas été rendu. Ne recommencez pas avant de l\'y voir.', 'wp-houla' ),
+                $this->format_amount( $executed / 100, $order )
+            ) . $studio;
+        }
         switch ( $code ) {
+            case 'SHOP_REFUND_UNCONFIRMED_ON_STORE':
+                $houla = isset( $body['houlaRefundedCents'] ) ? (int) $body['houlaRefundedCents'] : 0;
+                return sprintf(
+                    /* translators: %s: amount already refunded by Hou.la */
+                    __( 'Hou.la a déjà rendu %s à votre cliente sur cette commande, plus que ce que WooCommerce a enregistré : un remboursement précédent n\'est pas encore arrivé ici. Attendez qu\'il apparaisse (quelques minutes) ou vérifiez dans le studio avant de recommencer.', 'wp-houla' ),
+                    $this->format_amount( $houla / 100, $order )
+                ) . $nothing . $studio;
+            case 'API_KEY_WORKSPACE_MISMATCH':
+            case 'SHOP_REFUND_STORE_KEY_REQUIRED':
+                return __( 'La clé de connexion de cette boutique ne permet pas ce remboursement. Reconnectez WP-Houla (menu Hou.la), puis recommencez.', 'wp-houla' ) . $nothing . $studio;
             case 'SHOP_REFUND_AMOUNT_INVALID':
                 return __( 'Hou.la refuse ce montant : il dépasse ce qui reste à rembourser sur la commande Hou.la.', 'wp-houla' ) . $nothing . $studio;
             case 'SHOP_ORDER_ALREADY_REFUNDED':
@@ -386,6 +427,11 @@ class Wp_Houla_Pay_Refunds {
             return false;
         }
         if ( in_array( $code, array( 'SHOP_REFUND_PENDING_VERIFICATION', 'SHOP_REFUND_PARTIALLY_EXECUTED' ), true ) ) {
+            return true;
+        }
+        // Une part déjà rendue malgré le refus : à attendre, comme une issue inconnue.
+        $body = is_array( $data ) && isset( $data['body'] ) && is_array( $data['body'] ) ? $data['body'] : array();
+        if ( isset( $body['executedCents'] ) && (int) $body['executedCents'] > 0 ) {
             return true;
         }
         if ( 'wphoula_api_error' !== $error->get_error_code() && 0 === $status ) {
