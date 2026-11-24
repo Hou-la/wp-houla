@@ -9,6 +9,36 @@
 
 class Wp_Houla_Admin {
 
+    /**
+     * Codes d'erreur de l'API Hou.la (1.6.13, Trello #332) : la connexion du
+     * plugin est liée à l'espace choisi à l'écran d'accord de Hou.la. Elle ne
+     * peut plus changer d'espace, ni créer de clé pour un autre espace.
+     */
+    const CODES_ESPACE_LIE = array(
+        'OAUTH_SWITCH_WORKSPACE_REQUIRES_CONSENT',
+        'OAUTH_TOKEN_WORKSPACE_MISMATCH',
+        'API_KEY_WORKSPACE_MISMATCH',
+    );
+
+    /**
+     * Message clair, en français, quand l'API refuse parce que la connexion est
+     * liée à son espace (Trello #332). Null pour tout autre code : l'appelant
+     * garde alors le message de l'API.
+     *
+     * @param string $code   Code d'erreur renvoyé par l'API.
+     * @param string $action 'switch' (changer d'espace) ou 'cle' (clé d'un autre espace).
+     * @return string|null
+     */
+    public static function message_espace_lie( $code, $action ) {
+        if ( ! is_string( $code ) || ! in_array( $code, self::CODES_ESPACE_LIE, true ) ) {
+            return null;
+        }
+        if ( 'cle' === $action ) {
+            return __( 'Pour des raisons de sécurité, la connexion à Hou.la ne peut plus créer de clé pour un autre espace. Les clés déjà créées continuent de fonctionner. Pour vendre depuis un autre espace, déconnectez-vous puis reconnectez-vous en choisissant cet espace.', 'wp-houla' );
+        }
+        return __( 'Pour changer d\'espace, déconnectez-vous puis reconnectez-vous en choisissant l\'espace.', 'wp-houla' );
+    }
+
     /** @var Wp_Houla_Options */
     private $options;
 
@@ -293,7 +323,10 @@ class Wp_Houla_Admin {
         ) );
 
         if ( is_wp_error( $body ) ) {
-            wp_send_json_error( $body->get_error_message() );
+            // 1.6.13 (Trello #332) : la connexion est liée à son espace.
+            $data    = $body->get_error_data();
+            $message = self::message_espace_lie( is_array( $data ) && isset( $data['code'] ) ? $data['code'] : '', 'switch' );
+            wp_send_json_error( $message ? $message : $body->get_error_message() );
         }
 
         if ( ! is_array( $body ) || empty( $body['access_token'] ) ) {
@@ -921,7 +954,11 @@ class Wp_Houla_Admin {
                 'message'        => __( 'API key provisioned.', 'wp-houla' ),
             ) );
         } else {
-            $msg = isset( $body['message'] ) ? $body['message'] : 'HTTP ' . $status;
+            // 1.6.13 (Trello #332) : la connexion est liée à son espace.
+            $msg = self::message_espace_lie( is_array( $body ) && isset( $body['code'] ) ? $body['code'] : '', 'cle' );
+            if ( ! $msg ) {
+                $msg = isset( $body['message'] ) ? $body['message'] : 'HTTP ' . $status;
+            }
             wp_send_json_error( $msg );
         }
     }

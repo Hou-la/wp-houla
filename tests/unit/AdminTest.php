@@ -141,4 +141,27 @@ class AdminTest extends TestCase {
         $this->assertStringContainsString( 'notice-warning', $output );
         $this->assertStringContainsString( 'wp-houla', $output );
     }
+
+    // =====================================================================
+    // 1.6.13, Trello #332 : connexion liée à l'espace choisi sur Hou.la
+    // =====================================================================
+
+    public function test_message_espace_lie_pour_changer_d_espace(): void {
+        $msg = \Wp_Houla_Admin::message_espace_lie( 'OAUTH_SWITCH_WORKSPACE_REQUIRES_CONSENT', 'switch' );
+        $this->assertSame( "Pour changer d'espace, déconnectez-vous puis reconnectez-vous en choisissant l'espace.", $msg );
+    }
+
+    public function test_message_espace_lie_pour_la_cle_d_un_autre_espace(): void {
+        $msg = \Wp_Houla_Admin::message_espace_lie( 'OAUTH_TOKEN_WORKSPACE_MISMATCH', 'cle' );
+        $this->assertStringContainsString( 'ne peut plus créer de clé pour un autre espace', $msg );
+        $this->assertStringContainsString( 'déconnectez-vous puis reconnectez-vous', $msg );
+        $this->assertNotNull( \Wp_Houla_Admin::message_espace_lie( 'API_KEY_WORKSPACE_MISMATCH', 'cle' ) );
+    }
+
+    // Contre-témoin : un autre refus garde le message de l'API.
+    public function test_message_espace_lie_ignore_les_autres_codes(): void {
+        $this->assertNull( \Wp_Houla_Admin::message_espace_lie( 'WORKSPACE_NOT_MEMBER', 'switch' ) );
+        $this->assertNull( \Wp_Houla_Admin::message_espace_lie( '', 'cle' ) );
+        $this->assertNull( \Wp_Houla_Admin::message_espace_lie( null, 'cle' ) );
+    }
 }
