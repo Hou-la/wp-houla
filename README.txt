@@ -5,7 +5,7 @@ Tags: woocommerce, product sync, order sync, marketplace, live shopping
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.12
+Stable tag: 1.6.13
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 7.0
@@ -221,6 +221,11 @@ Open an issue on the [GitHub repository](https://github.com/Hou-la/wp-houla/issu
 7. **Shortcode output** - QR code image rendered in post content using the `[wphoula qrcode=1]` shortcode.
 
 == Changelog ==
+
+= 1.6.13 =
+* SECURITE : LA CONNEXION A HOU.LA EST LIEE A L'ESPACE QUE VOUS AVEZ CHOISI. Si les secrets de votre site etaient voles, ils ne donneraient plus acces qu'a cet espace, et plus a tous les espaces de votre compte Hou.la.
+* Pour changer d'espace, deconnectez-vous puis reconnectez-vous en choisissant l'espace sur Hou.la. Le bouton « Changer d'espace » l'explique desormais par un message clair.
+* La repartition des categories vers un autre espace ne peut plus creer de nouvelle cle : un message l'explique. Les cles deja creees continuent de fonctionner.
 
 = 1.6.12 =
 * REMBOURSEZ VOTRE CLIENTE DEPUIS WOOCOMMERCE, COMME AVEC STRIPE OU PAYPAL. Une commande Hou.la affiche maintenant le bouton « Rembourser X € via Hou.la Pay ». Il rend VRAIMENT l'argent a votre cliente, sur la carte avec laquelle elle a paye sur Hou.la, exactement comme un remboursement fait dans le studio Hou.la (notification a votre cliente, historique de la commande Hou.la).

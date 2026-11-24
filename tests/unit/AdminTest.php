@@ -141,4 +141,49 @@ class AdminTest extends TestCase {
         $this->assertStringContainsString( 'notice-warning', $output );
         $this->assertStringContainsString( 'wp-houla', $output );
     }
+
+    // =====================================================================
+    // 1.6.13, Trello #332 : connexion liée à l'espace choisi sur Hou.la
+    // =====================================================================
+
+    public function test_message_espace_lie_pour_changer_d_espace(): void {
+        $msg = \Wp_Houla_Admin::message_espace_lie( 'OAUTH_SWITCH_WORKSPACE_REQUIRES_CONSENT', 'switch' );
+        $this->assertSame( "Pour changer d'espace, déconnectez-vous puis reconnectez-vous en choisissant l'espace.", $msg );
+    }
+
+    public function test_message_espace_lie_pour_la_cle_d_un_autre_espace(): void {
+        $msg = \Wp_Houla_Admin::message_espace_lie( 'OAUTH_TOKEN_WORKSPACE_MISMATCH', 'cle' );
+        $this->assertStringContainsString( 'ne peut plus créer de clé pour un autre espace', $msg );
+        $this->assertStringContainsString( 'déconnectez-vous puis reconnectez-vous', $msg );
+        $this->assertNotNull( \Wp_Houla_Admin::message_espace_lie( 'API_KEY_WORKSPACE_MISMATCH', 'cle' ) );
+    }
+
+    // Relecture #332 : le bouton appelait l'API avec la clé du site (401), qui
+    // effaçait puis recréait la clé à chaque clic. Il répond désormais sans appel.
+    public function test_changer_d_espace_affiche_le_message_sans_appeler_l_api(): void {
+        Functions\when( 'check_ajax_referer' )->justReturn( true );
+        Functions\when( 'current_user_can' )->justReturn( true );
+        Functions\expect( 'wp_remote_request' )->never();
+        Functions\expect( 'wp_remote_post' )->never();
+        Functions\when( 'wp_send_json_error' )->alias( function ( $message ) {
+            throw new \RuntimeException( (string) $message );
+        } );
+        $_POST['workspace_id'] = 'ws-autre';
+
+        try {
+            ( new \Wp_Houla_Admin() )->ajax_switch_workspace();
+            $this->fail( 'wp_send_json_error aurait dû être appelé' );
+        } catch ( \RuntimeException $e ) {
+            $this->assertSame( "Pour changer d'espace, déconnectez-vous puis reconnectez-vous en choisissant l'espace.", $e->getMessage() );
+        } finally {
+            unset( $_POST['workspace_id'] );
+        }
+    }
+
+    // Contre-témoin : un autre refus garde le message de l'API.
+    public function test_message_espace_lie_ignore_les_autres_codes(): void {
+        $this->assertNull( \Wp_Houla_Admin::message_espace_lie( 'WORKSPACE_NOT_MEMBER', 'switch' ) );
+        $this->assertNull( \Wp_Houla_Admin::message_espace_lie( '', 'cle' ) );
+        $this->assertNull( \Wp_Houla_Admin::message_espace_lie( null, 'cle' ) );
+    }
 }
