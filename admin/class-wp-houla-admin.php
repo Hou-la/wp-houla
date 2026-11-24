@@ -301,9 +301,14 @@ class Wp_Houla_Admin {
     /**
      * AJAX: Switch to a different workspace.
      *
-     * Calls POST /api/oauth/switch-workspace on the Hou.la API via the
-     * Wp_Houla_Api class (uses X-Api-Key), stores the new tokens + workspace
-     * info, re-provisions the API key, and resets sync metadata.
+     * ~~Appelait POST /api/oauth/switch-workspace, puis enregistrait les jetons
+     * et recréait la clé du site.~~ Depuis 1.6.13 (Trello #332), Hou.la lie la
+     * connexion à l'espace choisi à l'écran d'accord : la route refuse tout
+     * changement d'espace au plugin. L'appeler ne servait plus à rien, et
+     * l'appel partait avec la clé du site (route réservée au jeton) : 401, la
+     * clé était effacée puis recréée, et une clé orpheline restait dans Hou.la
+     * à chaque clic. Le bouton explique donc directement comment changer
+     * d'espace. Suite prévue : un nouvel accord OAuth par espace (Trello #374).
      */
     public function ajax_switch_workspace() {
         check_ajax_referer( 'wphoula_admin', 'nonce' );
@@ -312,57 +317,7 @@ class Wp_Houla_Admin {
             wp_send_json_error( __( 'Permission denied.', 'wp-houla' ) );
         }
 
-        $workspace_id = isset( $_POST['workspace_id'] ) ? sanitize_text_field( wp_unslash( $_POST['workspace_id'] ) ) : '';
-        if ( empty( $workspace_id ) ) {
-            wp_send_json_error( __( 'No workspace ID provided.', 'wp-houla' ) );
-        }
-
-        $api  = new Wp_Houla_Api();
-        $body = $api->post( '/oauth/switch-workspace', array(
-            'workspace_id' => $workspace_id,
-        ) );
-
-        if ( is_wp_error( $body ) ) {
-            // 1.6.13 (Trello #332) : la connexion est liée à son espace.
-            $data    = $body->get_error_data();
-            $message = self::message_espace_lie( is_array( $data ) && isset( $data['code'] ) ? $data['code'] : '', 'switch' );
-            wp_send_json_error( $message ? $message : $body->get_error_message() );
-        }
-
-        if ( ! is_array( $body ) || empty( $body['access_token'] ) ) {
-            $msg = isset( $body['message'] ) ? $body['message'] : __( 'Réponse invalide de l\'API.', 'wp-houla' );
-            wp_send_json_error( $msg );
-        }
-
-        // Store new tokens + workspace info
-        $this->auth->store_tokens( $body );
-
-        // Safety net: ensure workspace_id is stored from the known value,
-        // even if the API response didn't include it.
-        $this->options->set( 'workspace_id', $body['workspace_id'] ?? $workspace_id );
-        if ( ! empty( $body['workspace_name'] ) ) {
-            $this->options->set( 'workspace_name', $body['workspace_name'] );
-        }
-
-        // Clear old API key and re-provision for the new workspace
-        $this->options->set( 'api_key', '' );
-        $this->auth->provision_api_key();
-
-        // Reset sync metadata (products are workspace-scoped)
-        $this->options->set( 'products_synced', 0 );
-        $this->options->set( 'last_full_sync', '' );
-
-        // Persist hasShop flag sent by the JS (from the workspaces list)
-        if ( isset( $_POST['has_shop'] ) ) {
-            $this->options->set( 'workspace_has_shop', rest_sanitize_boolean( wp_unslash( $_POST['has_shop'] ) ) );
-        }
-
-        wp_send_json_success( array(
-            'workspace_id'   => $body['workspace_id'] ?? $workspace_id,
-            'workspace_name' => $body['workspace_name'] ?? '',
-            'has_shop'       => $this->options->get( 'workspace_has_shop' ),
-            'message'        => __( 'Espace de travail changé avec succès.', 'wp-houla' ),
-        ) );
+        wp_send_json_error( self::message_espace_lie( 'OAUTH_SWITCH_WORKSPACE_REQUIRES_CONSENT', 'switch' ) );
     }
 
     /**
